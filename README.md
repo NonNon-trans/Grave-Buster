@@ -109,7 +109,8 @@ Remote設定は必須ではありません。`origin`が未設定・不正でも
 - Spawn: (X,Z)=(±10,±10)の4地点。透明・非衝突、上面Y=0、Neutral、Enabled、Duration=0。
 - 標準の自動Spawn / Respawnを利用。複数地点で重なりを減らしますが、同時Joinの完全な排他割当は行いません。
 - Lighting: ClockTime=14、Brightness=2、Ambient=(130,130,125)、OutdoorAmbient=(165,165,155)、ExposureCompensation=0、GlobalShadows=true。
-- 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。従来の120 / 450では中央から84 / 92 studs先の墓石列が霧の開始距離より手前だったため、開始・終了距離を短縮。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。DAYTIME・明るさは変更せず、Atmosphereや追加エフェクトも導入しません。見た目と中距離の視認性はMobile Landscapeで再確認が必要です。
+- 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。Human Gate PASS済みの値を維持します。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。Atmosphereは導入しません。
+- 曇天: `Workspace.Terrain`配下の標準Cloudsを使用。Enabled=true、Cover=1、Density=0.6、Color=(200,200,200)。青空の露出を抑えた昼間のGray系曇天を目指します。既存Cloudsがあれば再利用し、再生成しても増殖しません。外部Sky Assetなし。ClockTime・Brightness・Ambient・Fog・Arena geometryは変更していません。
 - 合計220 BaseParts（床1＋墓石211＋境界4＋Spawn4）。すべてAnchored。外部Asset、Heartbeat、毎フレーム処理なし。
 
 生成元は`src/server/ArenaService.lua`です。Server起動時にyieldせず構築し、床とSpawnを含めたModelをまとめてWorkspaceへ配置します。
@@ -117,7 +118,8 @@ Remote設定は必須ではありません。`origin`が未設定・不正でも
 Rojo同期後に生成コードを変更した場合は、Stop → Playで再生成してください。
 
 API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/classes/SpawnLocation)、
-[Lighting](https://create.roblox.com/docs/reference/engine/classes/Lighting)。
+[Lighting](https://create.roblox.com/docs/reference/engine/classes/Lighting)、
+[Clouds](https://create.roblox.com/docs/reference/engine/classes/Clouds)。
 
 ## Human Studio Check（GB-001）
 
@@ -129,9 +131,10 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 6. 茶色の土、四方の多数の墓石、中央に障害物がないこと、見える巨大Wallがないことを確認します。
 7. 四辺と四隅へ移動し、最内周の墓石列で止まり、その隙間を歩く・ジャンプする操作でも墓石群の外の空地へ出られないことを確認します。墓石から離れた何もない空間で突然止まる状態がないこと、見える巨大Wallがないことも確認します。
 8. Mobile Landscapeで中央から四方を見て、遠方の墓石列に薄いGray系の霧が視覚的に分かることを確認します。中央と端から見比べ、昼の明るさ、近距離・中距離のCharacterの識別しやすさが維持されていることも確認します。Fogの数値設定だけではPASSにしません。
+   空も見上げ、鮮やかな青空の露出が大幅に減り、Gray系の曇天に見えることを確認します。Mobileの低・標準画質でも雲と地上の視認性を確認し、夜のように暗くなっていないことを確認します。
 9. CharacterをResetし、Arena内へRespawnすることを確認します。可能ならStudioのServer & Clientsを2人以上で起動し、両者が正常にSpawn・移動できることも確認します。
 10. Stop → Playを繰り返し、Arenaが重複しないことと、Outputにエラーがないことを確認します。
 11. `git diff --check`と`git status --short`で確認用変更や生成物が残っていないことを確認し、Human / Reviewer Gateの結果を記録します。
 
 Rojo build成功だけではStudio実行時の動作・見た目は保証されません。GB-002へ進む前に上記Gateを完了してください。
-GB-001はHuman GateでFog / 境界位置の再確認待ちです。既存PASS項目を維持し、この2点が視覚・操作確認でPASSするまでCLOSEしません。
+Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。残る曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。

@@ -123,6 +123,18 @@ function ArenaService.Build(): Model
 	Lighting.FogStart = 50
 	Lighting.FogEnd = 260
 
+	-- Standard overcast sky, without changing the approved ground fog or daylight.
+	local clouds = Workspace.Terrain:FindFirstChildOfClass("Clouds")
+	if not clouds then
+		clouds = Instance.new("Clouds")
+		clouds.Name = "GraveyardClouds"
+	end
+	clouds.Enabled = true
+	clouds.Cover = 1
+	clouds.Density = 0.6
+	clouds.Color = Color3.fromRGB(200, 200, 200)
+	clouds.Parent = Workspace.Terrain
+
 	local previous = Workspace:FindFirstChild(ARENA_NAME)
 	if previous then
 		previous:Destroy()
