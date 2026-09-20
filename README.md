@@ -13,6 +13,14 @@ LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動
 Zombie、Weapon、Combat、UI、Economy、DataStoreは未実装です。
 Server BootstrapがArenaを生成し、Server / Clientそれぞれのロード完了ログも維持しています。
 
+## Platform direction
+
+Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
+GB-001ではRoblox標準Mobile movementを使用し、新しいMobile UIやInputは追加しません。
+
+Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
+これはPlayer boundaryとは別契約です。GB-001ではCollision Groupや例外処理も追加せず、将来Phaseで検討します。
+
 ## Repository structure
 
 ```text
@@ -97,11 +105,11 @@ Remote設定は必須ではありません。`origin`が未設定・不正でも
 - 床: 208 × 2 × 208 studs、上面Y=0。MaterialはGround、茶色RGB(133, 105, 73)。
 - 中央約160 × 160 studsは障害物なし。外周に片側21基＋23基の2列、四方合計176基の墓石。
 - 墓石: Concreteの通常型・縦長・8度傾斜・十字架型、Gray系4色。非衝突の装飾。
-- 境界: X/Z=±100に厚さ2、高さ40 studs（Y=-1〜39）の透明な衝突Partを4枚配置。内側は198 × 198 studs。角は重なり、床下まで覆います。
+- 境界: 最内周墓石列と同じX/Z=±84に、墓石と同じ厚さ1.2、高さ40 studs（Y=-1〜39）、長さ169.2の透明な衝突Partを4枚配置。内側は166.8 × 166.8 studs。四隅は重なり、床下まで覆います。墓石の手前面と境界の内側面が一致し、墓石列を通り抜けて外側の空地へ歩けない構成です。床208 × 208と中央約160 × 160のfree areaは維持しています。
 - Spawn: (X,Z)=(±10,±10)の4地点。透明・非衝突、上面Y=0、Neutral、Enabled、Duration=0。
 - 標準の自動Spawn / Respawnを利用。複数地点で重なりを減らしますが、同時Joinの完全な排他割当は行いません。
 - Lighting: ClockTime=14、Brightness=2、Ambient=(130,130,125)、OutdoorAmbient=(165,165,155)、ExposureCompensation=0、GlobalShadows=true。
-- 距離Fog: Start=120、End=450 studs、Color=(190,198,184)。Atmosphereは追加しません。近・中距離の視認性を優先し、遠景を薄く霞ませます。
+- 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。従来の120 / 450では中央から84 / 92 studs先の墓石列が霧の開始距離より手前だったため、開始・終了距離を短縮。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。DAYTIME・明るさは変更せず、Atmosphereや追加エフェクトも導入しません。見た目と中距離の視認性はMobile Landscapeで再確認が必要です。
 - 合計220 BaseParts（床1＋墓石211＋境界4＋Spawn4）。すべてAnchored。外部Asset、Heartbeat、毎フレーム処理なし。
 
 生成元は`src/server/ArenaService.lua`です。Server起動時にyieldせず構築し、床とSpawnを含めたModelをまとめてWorkspaceへ配置します。
@@ -117,12 +125,13 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Shared.ProjectInfo`がModuleScriptであることを確認します。
 3. `ServerScriptService.ArenaService`もModuleScriptであることを確認します。上記serveを起動し、Rojo pluginを接続します。接続・同期エラーがないことを確認します。
 4. Playを開始し、Outputに`[Grave Buster] Server loaded (v0.1 development)`と`[Grave Buster] Client loaded (v0.1 development)`が表示され、script errorがないことを確認します。Client確認にはRunではなくPlayを使用します。
-5. LobbyやMenuなしで中央付近へSpawnし、落下せずにWASD / ジャンプで平坦な床を自由に移動できることを確認します。
+5. Mobile Landscapeエミュレーションを優先し、LobbyやMenuなしで中央付近へSpawnし、標準Touch移動 / ジャンプで平坦な床を自由に移動できることを確認します。PC操作は補助確認とします。
 6. 茶色の土、四方の多数の墓石、中央に障害物がないこと、見える巨大Wallがないことを確認します。
-7. 四辺と四隅へ移動し、墓石の隙間を歩く・ジャンプする操作でも外へ出られないことを確認します。
-8. 日中の明るさ、遠景の薄いGray系の霧、近・中距離のCharacter視認性を確認します。PCとMobileエミュレーションでも移動・視認性を確認します。
+7. 四辺と四隅へ移動し、最内周の墓石列で止まり、その隙間を歩く・ジャンプする操作でも墓石群の外の空地へ出られないことを確認します。墓石から離れた何もない空間で突然止まる状態がないこと、見える巨大Wallがないことも確認します。
+8. Mobile Landscapeで中央から四方を見て、遠方の墓石列に薄いGray系の霧が視覚的に分かることを確認します。中央と端から見比べ、昼の明るさ、近距離・中距離のCharacterの識別しやすさが維持されていることも確認します。Fogの数値設定だけではPASSにしません。
 9. CharacterをResetし、Arena内へRespawnすることを確認します。可能ならStudioのServer & Clientsを2人以上で起動し、両者が正常にSpawn・移動できることも確認します。
 10. Stop → Playを繰り返し、Arenaが重複しないことと、Outputにエラーがないことを確認します。
 11. `git diff --check`と`git status --short`で確認用変更や生成物が残っていないことを確認し、Human / Reviewer Gateの結果を記録します。
 
 Rojo build成功だけではStudio実行時の動作・見た目は保証されません。GB-002へ進む前に上記Gateを完了してください。
+GB-001はHuman GateでFog / 境界位置の再確認待ちです。既存PASS項目を維持し、この2点が視覚・操作確認でPASSするまでCLOSEしません。

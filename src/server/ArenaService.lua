@@ -9,7 +9,9 @@ local ArenaService = {}
 local FLOOR_SIZE = 208
 local GRAVE_ROWS = { 84, 92 }
 local GRAVE_SPACING = 8
-local BOUNDARY_OFFSET = 100
+-- Match the innermost grave row; never leave a walkable strip behind it.
+local BOUNDARY_OFFSET = GRAVE_ROWS[1]
+local BOUNDARY_THICKNESS = 1.2 -- Same depth as the grave stones.
 local BOUNDARY_HEIGHT = 40
 local ARENA_NAME = "GraveyardArena"
 
@@ -79,7 +81,7 @@ function ArenaService.Build(): Model
 	for side = 0, 3 do
 		local rotation = CFrame.Angles(0, math.rad(side * 90), 0)
 		local wall = createPart(boundaries, "Boundary" .. side,
-			Vector3.new(FLOOR_SIZE, BOUNDARY_HEIGHT, 2),
+			Vector3.new(BOUNDARY_OFFSET * 2 + BOUNDARY_THICKNESS, BOUNDARY_HEIGHT, BOUNDARY_THICKNESS),
 			rotation * CFrame.new(0, BOUNDARY_HEIGHT / 2 - 1, -BOUNDARY_OFFSET), Color3.new(1, 1, 1))
 		wall.Transparency = 1
 		wall.CastShadow = false
@@ -117,8 +119,9 @@ function ArenaService.Build(): Model
 	Lighting.ExposureCompensation = 0
 	-- Distance fog only; do not combine with an Atmosphere instance.
 	Lighting.FogColor = Color3.fromRGB(190, 198, 184)
-	Lighting.FogStart = 120
-	Lighting.FogEnd = 450
+	-- The grave rows are only 84 / 92 studs from center: fog must start before them.
+	Lighting.FogStart = 50
+	Lighting.FogEnd = 260
 
 	local previous = Workspace:FindFirstChild(ARENA_NAME)
 	if previous then
