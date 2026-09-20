@@ -109,8 +109,9 @@ Remote設定は必須ではありません。`origin`が未設定・不正でも
 - Spawn: (X,Z)=(±10,±10)の4地点。透明・非衝突、上面Y=0、Neutral、Enabled、Duration=0。
 - 標準の自動Spawn / Respawnを利用。複数地点で重なりを減らしますが、同時Joinの完全な排他割当は行いません。
 - Lighting: ClockTime=14、Brightness=2、Ambient=(130,130,125)、OutdoorAmbient=(165,165,155)、ExposureCompensation=0、GlobalShadows=true。
-- 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。Human Gate PASS済みの値を維持します。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。Atmosphereは導入しません。
+- 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。Human Gate PASS済みの値を維持します。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。
 - 曇天: `Workspace.Terrain`配下の標準Cloudsを使用。Enabled=true、Cover=1、Density=0.6、Color=(200,200,200)。青空の露出を抑えた昼間のGray系曇天を目指します。既存Cloudsがあれば再利用し、再生成しても増殖しません。外部Sky Assetなし。ClockTime・Brightness・Ambient・Fog・Arena geometryは変更していません。
+- Gray horizon: `Lighting`配下の標準Atmosphereを使用。Density=0.22、Offset=0.1、Haze=2.2、Glare=0、Color=(205,205,200)、Decay=(185,185,180)。低いDensityで近距離のCharacter視認性を保ち、GrayのHazeで地平線のBlue / Cyanを抑えてCloudsからFogへつなぎます。Atmosphereが存在する間、Robloxは従来のFog描画を隠すため、FogStart / FogEnd / FogColorは承認値のまま保持し、Atmosphere側で同じGrayの遠景表現を継続します。Brightnessは変更していません。既存Atmosphereがあれば再利用し、再生成しても増殖しません。
 - 合計220 BaseParts（床1＋墓石211＋境界4＋Spawn4）。すべてAnchored。外部Asset、Heartbeat、毎フレーム処理なし。
 
 生成元は`src/server/ArenaService.lua`です。Server起動時にyieldせず構築し、床とSpawnを含めたModelをまとめてWorkspaceへ配置します。
@@ -119,7 +120,8 @@ Rojo同期後に生成コードを変更した場合は、Stop → Playで再生
 
 API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/classes/SpawnLocation)、
 [Lighting](https://create.roblox.com/docs/reference/engine/classes/Lighting)、
-[Clouds](https://create.roblox.com/docs/reference/engine/classes/Clouds)。
+[Clouds](https://create.roblox.com/docs/reference/engine/classes/Clouds)、
+[Atmosphere](https://create.roblox.com/docs/reference/engine/classes/Atmosphere)。
 
 ## Human Studio Check（GB-001）
 
@@ -131,10 +133,10 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 6. 茶色の土、四方の多数の墓石、中央に障害物がないこと、見える巨大Wallがないことを確認します。
 7. 四辺と四隅へ移動し、最内周の墓石列で止まり、その隙間を歩く・ジャンプする操作でも墓石群の外の空地へ出られないことを確認します。墓石から離れた何もない空間で突然止まる状態がないこと、見える巨大Wallがないことも確認します。
 8. Mobile Landscapeで中央から四方を見て、遠方の墓石列に薄いGray系の霧が視覚的に分かることを確認します。中央と端から見比べ、昼の明るさ、近距離・中距離のCharacterの識別しやすさが維持されていることも確認します。Fogの数値設定だけではPASSにしません。
-   空も見上げ、鮮やかな青空の露出が大幅に減り、Gray系の曇天に見えることを確認します。Mobileの低・標準画質でも雲と地上の視認性を確認し、夜のように暗くなっていないことを確認します。
+   空も見上げ、鮮やかな青空の露出が大幅に減り、Gray系の曇天に見えることを確認します。特に地平線にBlue / Cyanの帯が残らず、厚いGray cloud layer → Gray horizon → light gray fog → brown groundへ自然につながることを確認します。Mobileの低・標準画質でも雲と地上の視認性を確認し、夜のように暗くなっていないことを確認します。
 9. CharacterをResetし、Arena内へRespawnすることを確認します。可能ならStudioのServer & Clientsを2人以上で起動し、両者が正常にSpawn・移動できることも確認します。
 10. Stop → Playを繰り返し、Arenaが重複しないことと、Outputにエラーがないことを確認します。
 11. `git diff --check`と`git status --short`で確認用変更や生成物が残っていないことを確認し、Human / Reviewer Gateの結果を記録します。
 
 Rojo build成功だけではStudio実行時の動作・見た目は保証されません。GB-002へ進む前に上記Gateを完了してください。
-Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。残る曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。
+Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。残るGray horizonを含む曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。

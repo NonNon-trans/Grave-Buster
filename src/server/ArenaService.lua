@@ -117,7 +117,8 @@ function ArenaService.Build(): Model
 	Lighting.OutdoorAmbient = Color3.fromRGB(165, 165, 155)
 	Lighting.GlobalShadows = true
 	Lighting.ExposureCompensation = 0
-	-- Distance fog only; do not combine with an Atmosphere instance.
+	-- Preserve the approved distance-fog contract. Atmosphere below extends its
+	-- gray tone into the horizon and sky instead of changing these distances.
 	Lighting.FogColor = Color3.fromRGB(190, 198, 184)
 	-- The grave rows are only 84 / 92 studs from center: fog must start before them.
 	Lighting.FogStart = 50
@@ -134,6 +135,21 @@ function ArenaService.Build(): Model
 	clouds.Density = 0.6
 	clouds.Color = Color3.fromRGB(200, 200, 200)
 	clouds.Parent = Workspace.Terrain
+
+	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+	if not atmosphere then
+		atmosphere = Instance.new("Atmosphere")
+		atmosphere.Name = "GraveyardAtmosphere"
+	end
+	-- Low density preserves nearby characters; gray haze removes the cyan
+	-- horizon and blends it into the approved light-gray ground fog.
+	atmosphere.Density = 0.22
+	atmosphere.Offset = 0.1
+	atmosphere.Haze = 2.2
+	atmosphere.Glare = 0
+	atmosphere.Color = Color3.fromRGB(205, 205, 200)
+	atmosphere.Decay = Color3.fromRGB(185, 185, 180)
+	atmosphere.Parent = Lighting
 
 	local previous = Workspace:FindFirstChild(ARENA_NAME)
 	if previous then
