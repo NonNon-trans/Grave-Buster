@@ -111,7 +111,8 @@ Remote設定は必須ではありません。`origin`が未設定・不正でも
 - Lighting: ClockTime=14、Brightness=2、Ambient=(130,130,125)、OutdoorAmbient=(165,165,155)、ExposureCompensation=0、GlobalShadows=true。
 - 距離Fog: Start=50、End=260 studs、Color=(190,198,184)。Human Gate PASS済みの値を維持します。近距離50 studsまでは明瞭さを保ち、墓石列から遠景へ徐々に霞ませます。
 - 曇天: `Workspace.Terrain`配下の標準Cloudsを使用。Enabled=true、Cover=1、Density=0.6、Color=(200,200,200)。青空の露出を抑えた昼間のGray系曇天を目指します。既存Cloudsがあれば再利用し、再生成しても増殖しません。外部Sky Assetなし。ClockTime・Brightness・Ambient・Fog・Arena geometryは変更していません。
-- Gray horizon: `Lighting`配下の標準Atmosphereを使用。Density=0.22、Offset=0.1、Haze=2.2、Glare=0、Color=(205,205,200)、Decay=(185,185,180)。低いDensityで近距離のCharacter視認性を保ち、GrayのHazeで地平線のBlue / Cyanを抑えてCloudsからFogへつなぎます。Atmosphereが存在する間、Robloxは従来のFog描画を隠すため、FogStart / FogEnd / FogColorは承認値のまま保持し、Atmosphere側で同じGrayの遠景表現を継続します。Brightnessは変更していません。既存Atmosphereがあれば再利用し、再生成しても増殖しません。
+- Sky strategy: Atmosphereは完全に削除し、外部Sky / skybox Assetも使用しません。Cloudsが上空を覆い、従来Fogが遠景を霞ませ、ColorCorrectionがCloudsの下に残るRoblox標準SkyのBlue / Cyanを抑える構成です。これによりAtmosphere導入前にPASSしたFog描画を再び有効にします。
+- ColorCorrection: `Lighting.GraveyardColorCorrection`を1個だけ生成。Enabled=true、Saturation=-0.45、Contrast=-0.05、Brightness=0.02、TintColor=(225,225,220)。明るさを大きく落とさず、色を完全なMonochromeにせず、GroundのBrownとCharacter colorを残したまま晴天色を弱めます。
 - 合計220 BaseParts（床1＋墓石211＋境界4＋Spawn4）。すべてAnchored。外部Asset、Heartbeat、毎フレーム処理なし。
 
 生成元は`src/server/ArenaService.lua`です。Server起動時にyieldせず構築し、床とSpawnを含めたModelをまとめてWorkspaceへ配置します。
@@ -121,7 +122,7 @@ Rojo同期後に生成コードを変更した場合は、Stop → Playで再生
 API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/classes/SpawnLocation)、
 [Lighting](https://create.roblox.com/docs/reference/engine/classes/Lighting)、
 [Clouds](https://create.roblox.com/docs/reference/engine/classes/Clouds)、
-[Atmosphere](https://create.roblox.com/docs/reference/engine/classes/Atmosphere)。
+[ColorCorrectionEffect](https://create.roblox.com/docs/reference/engine/classes/ColorCorrectionEffect)。
 
 ## Human Studio Check（GB-001）
 
@@ -139,4 +140,4 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 11. `git diff --check`と`git status --short`で確認用変更や生成物が残っていないことを確認し、Human / Reviewer Gateの結果を記録します。
 
 Rojo build成功だけではStudio実行時の動作・見た目は保証されません。GB-002へ進む前に上記Gateを完了してください。
-Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。残るGray horizonを含む曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。
+Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。Atmosphere方式はHorizonを明るくしたためREJECTされ、削除しました。再構成したGray horizonを含む曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。

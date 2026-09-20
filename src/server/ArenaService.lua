@@ -117,8 +117,7 @@ function ArenaService.Build(): Model
 	Lighting.OutdoorAmbient = Color3.fromRGB(165, 165, 155)
 	Lighting.GlobalShadows = true
 	Lighting.ExposureCompensation = 0
-	-- Preserve the approved distance-fog contract. Atmosphere below extends its
-	-- gray tone into the horizon and sky instead of changing these distances.
+	-- The approved legacy fog remains the sole controller of distant visibility.
 	Lighting.FogColor = Color3.fromRGB(190, 198, 184)
 	-- The grave rows are only 84 / 92 studs from center: fog must start before them.
 	Lighting.FogStart = 50
@@ -136,20 +135,31 @@ function ArenaService.Build(): Model
 	clouds.Color = Color3.fromRGB(200, 200, 200)
 	clouds.Parent = Workspace.Terrain
 
-	local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
-	if not atmosphere then
-		atmosphere = Instance.new("Atmosphere")
-		atmosphere.Name = "GraveyardAtmosphere"
+	-- Atmosphere disables legacy Fog and previously brightened the horizon.
+	-- Remove any copy so FogStart/FogEnd control the approved distant fade.
+	for _, child in Lighting:GetChildren() do
+		if child:IsA("Atmosphere") then
+			child:Destroy()
+		end
 	end
-	-- Low density preserves nearby characters; gray haze removes the cyan
-	-- horizon and blends it into the approved light-gray ground fog.
-	atmosphere.Density = 0.22
-	atmosphere.Offset = 0.1
-	atmosphere.Haze = 2.2
-	atmosphere.Glare = 0
-	atmosphere.Color = Color3.fromRGB(205, 205, 200)
-	atmosphere.Decay = Color3.fromRGB(185, 185, 180)
-	atmosphere.Parent = Lighting
+
+	local colorCorrection = Lighting:FindFirstChild("GraveyardColorCorrection")
+	if colorCorrection and not colorCorrection:IsA("ColorCorrectionEffect") then
+		colorCorrection:Destroy()
+		colorCorrection = nil
+	end
+	if not colorCorrection then
+		colorCorrection = Instance.new("ColorCorrectionEffect")
+		colorCorrection.Name = "GraveyardColorCorrection"
+	end
+	-- Retain enough color to distinguish characters and brown ground while
+	-- removing the clear-sky cyan that remains beneath the cloud layer.
+	colorCorrection.Enabled = true
+	colorCorrection.Saturation = -0.45
+	colorCorrection.Contrast = -0.05
+	colorCorrection.Brightness = 0.02
+	colorCorrection.TintColor = Color3.fromRGB(225, 225, 220)
+	colorCorrection.Parent = Lighting
 
 	local previous = Workspace:FindFirstChild(ARENA_NAME)
 	if previous then
