@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# Generated Rojo places and local build output
+/build/
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+*.rbxlx.lock
