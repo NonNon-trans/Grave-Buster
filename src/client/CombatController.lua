@@ -6,7 +6,9 @@ local UserInputService = game:GetService("UserInputService")
 
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
 local HoldState = require(script.Parent:WaitForChild("HoldState"))
+local OwnedWeaponSource = require(script.Parent:WaitForChild("OwnedWeaponSource"))
 local WeaponPresenter = require(script.Parent:WaitForChild("WeaponPresenter"))
+local WeaponSwitcher = require(script.Parent:WaitForChild("WeaponSwitcher"))
 
 local CombatController = {}
 local player = Players.LocalPlayer
@@ -59,6 +61,8 @@ function CombatController.Start()
 	gui.Name = "GraveBusterCombatGui"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
+	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
+	gui.ClipToDeviceSafeArea = true
 	gui.Parent = playerGui
 
 	local attackButton = makeButton(
@@ -68,30 +72,25 @@ function CombatController.Start()
 		UDim2.new(1, -86, 0.6, 0)
 	)
 	attackButton.Parent = gui
-	local devButton = makeButton(
-		"DevWeaponCycle",
-		"DEV: BASEBALL BAT",
-		UDim2.fromOffset(176, 42),
-		UDim2.new(1, -118, 0.36, 0)
-	)
-	devButton.TextScaled = false
-	devButton.TextSize = 15
-	devButton.Parent = gui
 
 	local function stopHold()
 		holdState:Stop()
 		activeInput = nil
 	end
+	local ownedWeapons = OwnedWeaponSource.GetOwnedWeapons()
+	local switcher = WeaponSwitcher.Create(gui, ownedWeapons, function(requestedWeapon)
+		stopHold()
+		equipRemote:FireServer(requestedWeapon)
+	end)
 
 	local function equipPresentation()
 		local selected = player:GetAttribute("EquippedWeapon")
-		if not WeaponConfig.IsValid(selected) then
+		if not WeaponConfig.IsValid(selected) or not table.find(ownedWeapons, selected) then
 			selected = WeaponConfig.DefaultWeapon
 		end
 		currentWeapon = selected
-		local config = WeaponConfig.Get(currentWeapon)
-		devButton.Text = "DEV: " .. config.DisplayName
 		stopHold()
+		switcher:SetSelected(currentWeapon)
 		if player.Character then
 			WeaponPresenter.Equip(player.Character, currentWeapon)
 		end
@@ -141,16 +140,10 @@ function CombatController.Start()
 		end
 	end)
 
-	devButton.Activated:Connect(function()
-		stopHold()
-		local index = table.find(WeaponConfig.Order, currentWeapon) or 1
-		local nextWeapon = WeaponConfig.Order[index % #WeaponConfig.Order + 1]
-		equipRemote:FireServer(nextWeapon)
-	end)
-
 	player:GetAttributeChangedSignal("EquippedWeapon"):Connect(equipPresentation)
 	player.CharacterRemoving:Connect(function()
 		stopHold()
+		switcher:CancelInteraction()
 		WeaponPresenter.Detach()
 	end)
 	player.CharacterAdded:Connect(function()

@@ -2,7 +2,7 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-003 — Core Weapon Combat**
+現在Phase: **GB-004 — Weapon Switcher UI**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -16,7 +16,7 @@ Combat result、Zombie lifecycle、Wave progressionはServer Authorityです。S
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-GB-003でもRoblox標準Mobile movementを使用します。右側にAttack buttonと一時的なDEV Weapon切替、上部中央に小さなWave表示を置きます。
+GB-004でもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にProduction Weapon Switcher、上部中央に小さなWave表示を置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
@@ -38,7 +38,10 @@ Grave-Buster/
 │   ├── client/
 │   │   ├── CombatController.lua
 │   │   ├── HoldState.lua
+│   │   ├── OwnedWeaponSource.lua
 │   │   ├── WeaponPresenter.lua
+│   │   ├── WeaponSwitcher.lua
+│   │   ├── WeaponSwitcherRules.lua
 │   │   ├── WaveHud.lua
 │   │   └── Bootstrap.client.lua
 │   └── shared/
@@ -52,6 +55,8 @@ Grave-Buster/
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
 │   ├── WeaponConfig.spec.luau
+│   ├── WeaponSwitcherRules.spec.luau
+│   ├── validate_client_mapping.py
 │   └── ZombieRules.spec.luau
 ├── default.project.json
 ├── rokit.toml
@@ -63,11 +68,11 @@ Grave-Buster/
 | --- | --- | --- |
 | `src/server` | `ServerScriptService` | Arena、Zombie / Wave、attack検証、hit query、defeat / physics cleanup |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、local weapon presentation、DEV selector、Wave HUD |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、local weapon presentation、Production Weapon Switcher、Wave HUD |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde設定、Weapon tuning |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
-Combat intentとDEV equip requestだけを`ReplicatedStorage.CombatRemotes`でServerへ送ります。Clientはhit targetやdefeat結果を指定できません。
+Combat intentとWeapon selection requestだけを`ReplicatedStorage.CombatRemotes`でServerへ送ります。Clientはhit targetやdefeat結果を指定できません。
 Client ModuleScriptはStarter containerのruntime cloneへ依存せず、`ReplicatedStorage.Client`の安定したhierarchyからBootstrapがrequireします。
 
 ## Toolchain
@@ -119,7 +124,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-003の作業branchは`phase/GB-003-core-combat`です。
+GB-004の作業branchは`phase/GB-004-weapon-switcher`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -171,7 +176,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Defeat lifecycle: ACTIVE → `ZombieService.Release` → cap slot解放 → DEFEATED → server-owned physics impulse → 1.8〜2.4秒表示 → Debris cleanup。同じZombieの二重Releaseはregistryが拒否します。
 - Collision: Defeated rigは全BasePartを非衝突・非Touchにし、`DefeatedZombie` groupへ移します。PlayerやHordeを押さず、Player用透明boundaryにも阻まれないため、将来の場外Home Runへ拡張できます。
 - Presentation: 外部Asset IDなし。5種類のprimitive weaponをLocal Characterの右手へMotor6Dで保持し、attack時はlocal procedural swingを再生します。Server gameplayをAnimation timingへ依存させません。
-- DEV selection: 右側の小さな`DEV:` buttonでBat → Pan → Hammer → Blower → Thunder Rodを循環します。正式Carousel、ownership、Shop処理は含みません。選択はPlayer attributeに保持され、respawn後も同じSession内で復元します。
+- Equip pipeline: 選択要求はServerの既存`EquipRequest`へ送り、確認済み`EquippedWeapon` attributeによってWeapon modelとUI表示を更新します。選択はSession内で保持され、respawn後も復元します。
 
 | Weapon | Interval | Hit shape / range | Max | Knockback H / V | Physics表示 |
 | --- | ---: | --- | ---: | ---: | ---: |
@@ -183,6 +188,18 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 全Weaponは固定Health 1のZombieを一撃でdefeatします。Damage number、HP scaling、Player damageはありません。Waveは6 → 9 → 12 → 15 → 18 → 21 → 24を維持し、transitionで生存Zombieを消しません。cap中のspawn slotはskipされ、defeatでslotが空けば以後のscheduleから再供給されます。
 
+## Weapon Switcher仕様（GB-004）
+
+- Layout: `ScreenInsets=DeviceSafeInsets`のScreenGui内、画面下部中央へAnchorPoint `(0.5, 1)`、相対幅42%、高さ74 pxで配置します。幅は280〜430 pxに制限し、標準Movement、Jump、右側ATTACKを避けます。
+- Controls: 左右に62×62 pxのPrevious / Next touch target、中央に短い文字IconとWeapon名を表示します。外部Image Assetは使用しません。
+- Owned source: `OwnedWeaponSource.GetOwnedWeapons()`が`WeaponConfig.Order`のcopyを返します。GB-004では5 WeaponすべてOwnedです。Switcherの`SetOwnedWeapons()`は重複・不正Weaponを除外し、将来のlist更新とcurrent weapon消失時のfallbackを受けられます。
+- Selection authority: Arrow / Swipeは既存`EquipRequest`へselection intentを送り、表示とWeapon modelはServerが更新した`EquippedWeapon` attributeで確定します。UI animation完了を待たず即requestします。
+- Wrap: 最初からPreviousで最後、最後からNextで最初へ移動します。高速操作中はpending cursorで順序を保持し、表示は最新のServer確認へ追従します。
+- Swipe: 中央領域でのみdragを開始し、release時の水平移動48 px以上かつ水平量が垂直量の1.25倍を超えた場合だけ1段切り替えます。LeftはNext、RightはPreviousです。Gestureはfinish時に消費されるため1 Swipeから複数切替しません。
+- Visibility: Idle時は背景Transparency 0.50、文字 / Icon 0.42、Outline 0.55。Touch時はすべて0へ即時変更します。操作終了後1.0秒完全表示を保ち、0.3秒でIdleへfadeします。generation tokenとTween cancelによりfade中の再Touchを即時反映します。
+- Feedback: Server確認後、中央itemを0.90から1.00へ0.14秒でscaleして切替を示します。GameplayのEquip処理は待ちません。
+- Lifecycle: Weapon切替要求時に旧Hold-to-Attack loopを停止します。GUIはrespawnを越えて維持され、Character再生成後はSession内の確認済みWeaponを再装備します。DEV selectorとPlayer-facing development文字列は削除済みです。
+
 Static test:
 
 ```sh
@@ -193,6 +210,7 @@ build/luau-tools/luau tests/WeaponConfig.spec.luau
 build/luau-tools/luau tests/CombatRules.spec.luau
 build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
 build/luau-tools/luau tests/HoldState.spec.luau
+build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
@@ -203,7 +221,7 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 ## Human Studio Check（GB-001）
 
 1. 上記buildコマンドを実行し、`build/Grave-Buster.rbxlx`をStudioで開きます。
-2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Client`に`CombatController`、`HoldState`、`WaveHud`、`WeaponPresenter`がModuleScriptとして存在することを確認します。`ReplicatedStorage.Shared.ProjectInfo`もModuleScriptであることを確認します。
+2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Client`にCombat / Weapon Switcher関連ModuleScriptが存在することを確認します。`ReplicatedStorage.Shared.ProjectInfo`もModuleScriptであることを確認します。
 3. `ServerScriptService.ArenaService`もModuleScriptであることを確認します。上記serveを起動し、Rojo pluginを接続します。接続・同期エラーがないことを確認します。
 4. Playを開始し、Outputに`[Grave Buster] Server loaded (v0.1 development)`と`[Grave Buster] Client loaded (v0.1 development)`が表示され、script errorがないことを確認します。Client確認にはRunではなくPlayを使用します。
 5. Mobile Landscapeエミュレーションを優先し、LobbyやMenuなしで中央付近へSpawnし、標準Touch移動 / ジャンプで平坦な床を自由に移動できることを確認します。PC操作は補助確認とします。
@@ -236,7 +254,7 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 
 1. buildしたPlaceをStudioで開き、Device EmulatorをMobile LandscapeにしてPlayします。LobbyなしでSpawnし、3秒後からWaveが始まることを確認します。
 2. 右側の`ATTACK`をtapし、即座にweapon swingが見えることを確認します。移動しながら押せること、長押し中は連続attackし、指を離すと即停止することを確認します。
-3. `DEV:` buttonを押し、BASEBALL BAT / FRYING PAN / GIANT HAMMER / BLOWER / THUNDER RODの5種が順番に表示・装備されることを確認します。切替中にhold loopや旧modelが残らないことも確認します。
+3. 下部中央のProduction Weapon SwitcherでBASEBALL BAT / FRYING PAN / GIANT HAMMER / BLOWER / THUNDER RODの5種が順番に表示・装備されることを確認します。切替中にhold loopや旧modelが残らないことも確認します。
 4. Batは前方、Panは左右へ散らす、Hammerは高く重く複数、Blowerは広い前方、Thunder Rodは近傍へ連鎖することを確認します。各Weaponで複数体を一撃defeatでき、hit直後に消えず1.8〜2.4秒飛んでから消えることを確認します。
 5. Defeated ZombieがPlayerを押さず、ACTIVE ZombieのAIへ戻らず、同じtargetが二重defeatされないことを確認します。Player用墓石boundaryを越えるlaunchが可能であることも観察します。
 6. 何もattackせず30秒以上待ち、ACTIVE Zombieが時間だけでは消えずcapまで圧力が蓄積することを確認します。大量にdefeatすると空間が開き、空いたslotへ後続WaveからZombieが供給されることを確認します。
@@ -246,3 +264,16 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 10. 低・標準画質でHordeとlaunchが読み取れ、明確なframe rate異常がないことを確認します。Stop → Playも繰り返し、Remote、GUI、foldersが重複せずOutputにRuntime Errorがないことを確認します。
 
 Static validationではserver rules、registry、hold lifecycle、config、Wave pressureを確認します。最終的なTouch feel、Humanoid physics、Knockback量、Mobile frame rateは上記Human Gateで判断してください。
+
+## Human Studio / Published Mobile Check（GB-004）
+
+1. `build/Grave-Buster-gb004.rbxlx`をStudioで開き、Mobile LandscapeでJoinします。Baseball Batが装備され、下部中央にSwitcher、右側にATTACKが表示されることを確認します。
+2. Idle時にもSwitcherを認識でき、Touch直後に背景、Icon、Weapon名、Arrowが完全表示になることを確認します。
+3. Previous / Nextの62×62 px領域をtapし、1回につき1 Weaponだけ切り替わること、両端でwrapすることを確認します。
+4. 中央領域を左へ48 px以上swipeしてNext、右へswipeしてPreviousへ切り替わることを確認します。短いdragと縦dragでは切り替わらないことも確認します。
+5. 操作終了から1.0秒は完全表示され、その後0.3秒でIdleへ戻ること、fade中のTouchで即完全表示へ戻ることを確認します。
+6. 切替確定直後にWeapon modelと表示名が一致し、すぐATTACKできることを確認します。ATTACK hold中の切替では旧loopが停止し、再Holdで新しいintervalが使われることを確認します。
+7. Arrow連打と連続Swipeを行い、Weapon model重複、古い表示、複数段誤移動、animation破綻がないことを確認します。
+8. Character Reset後も直前Weapon、Switcher表示、Weapon modelが一致し、GUIが重複しないことを確認します。
+9. Movement、Camera、Jump、ATTACKと重大なTouch干渉がなく、小さいPhone Landscapeでも文字やArrowがclipしないことを確認します。
+10. GB-003 Combat Feel、Zombie Horde、Wave、Environmentを再確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceへPublishしたPlaceをPhysical Mobile DeviceのLandscapeで行います。

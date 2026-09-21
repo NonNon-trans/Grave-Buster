@@ -45,7 +45,15 @@ def validate(place_path: str) -> None:
     client = direct_child(replicated_storage, "Client", "Folder")
 
     modules = {}
-    for name in ("CombatController", "HoldState", "WaveHud", "WeaponPresenter"):
+    for name in (
+        "CombatController",
+        "HoldState",
+        "OwnedWeaponSource",
+        "WaveHud",
+        "WeaponPresenter",
+        "WeaponSwitcher",
+        "WeaponSwitcherRules",
+    ):
         modules[name] = direct_child(client, name, "ModuleScript")
 
     starter_player = direct_child(root, "StarterPlayer", "StarterPlayer")
@@ -63,7 +71,7 @@ def validate(place_path: str) -> None:
     assert "script.Parent.CombatController" not in bootstrap_source
 
     controller_source = source_of(modules["CombatController"])
-    for dependency in ("HoldState", "WeaponPresenter"):
+    for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
         fragment = f'script.Parent:WaitForChild("{dependency}")'
         assert fragment in controller_source, f"CombatController does not resolve {fragment}"
     for initialization_guard in (
@@ -71,10 +79,25 @@ def validate(place_path: str) -> None:
         "if started then",
         'playerGui:FindFirstChild("GraveBusterCombatGui")',
         "previous:Destroy()",
+        "WeaponSwitcher.Create(gui, ownedWeapons",
+        "equipRemote:FireServer(requestedWeapon)",
+        "switcher:SetSelected(currentWeapon)",
+        "player.CharacterRemoving:Connect",
+        "player.CharacterAdded:Connect",
     ):
         assert initialization_guard in controller_source, (
             f"CombatController initialization guard missing: {initialization_guard}"
         )
+
+    switcher_source = source_of(modules["WeaponSwitcher"])
+    assert 'script.Parent:WaitForChild("WeaponSwitcherRules")' in switcher_source
+    owned_source = source_of(modules["OwnedWeaponSource"])
+    assert "table.clone(WeaponConfig.Order)" in owned_source
+
+    for name, module in modules.items():
+        source = source_of(module)
+        assert '"DEV:' not in source, f"Player-facing DEV text remains in {name}"
+        assert "DevWeaponCycle" not in source, f"DEV selector remains in {name}"
 
     starter_module_names = {
         instance_name(item)
@@ -89,7 +112,8 @@ def validate(place_path: str) -> None:
     print(
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
-        "-> HoldState / WeaponPresenter; WaveHud also resolved"
+        "-> OwnedWeaponSource / WeaponSwitcher / HoldState / WeaponPresenter; "
+        "WeaponSwitcherRules and WaveHud also resolved"
     )
 
 
