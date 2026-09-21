@@ -62,11 +62,13 @@ Grave-Buster/
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
 | `src/server` | `ServerScriptService` | Arena、Zombie / Wave、attack検証、hit query、defeat / physics cleanup |
-| `src/client` | `StarterPlayer.StarterPlayerScripts` | Touch input、local weapon presentation、DEV selector、Wave HUD |
+| `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、local weapon presentation、DEV selector、Wave HUD |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde設定、Weapon tuning |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
 Combat intentとDEV equip requestだけを`ReplicatedStorage.CombatRemotes`でServerへ送ります。Clientはhit targetやdefeat結果を指定できません。
+Client ModuleScriptはStarter containerのruntime cloneへ依存せず、`ReplicatedStorage.Client`の安定したhierarchyからBootstrapがrequireします。
 
 ## Toolchain
 
@@ -191,6 +193,7 @@ build/luau-tools/luau tests/WeaponConfig.spec.luau
 build/luau-tools/luau tests/CombatRules.spec.luau
 build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
 build/luau-tools/luau tests/HoldState.spec.luau
+python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
 API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Humanoid)、
@@ -200,7 +203,7 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 ## Human Studio Check（GB-001）
 
 1. 上記buildコマンドを実行し、`build/Grave-Buster.rbxlx`をStudioで開きます。
-2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Shared.ProjectInfo`がModuleScriptであることを確認します。
+2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Client`に`CombatController`、`HoldState`、`WaveHud`、`WeaponPresenter`がModuleScriptとして存在することを確認します。`ReplicatedStorage.Shared.ProjectInfo`もModuleScriptであることを確認します。
 3. `ServerScriptService.ArenaService`もModuleScriptであることを確認します。上記serveを起動し、Rojo pluginを接続します。接続・同期エラーがないことを確認します。
 4. Playを開始し、Outputに`[Grave Buster] Server loaded (v0.1 development)`と`[Grave Buster] Client loaded (v0.1 development)`が表示され、script errorがないことを確認します。Client確認にはRunではなくPlayを使用します。
 5. Mobile Landscapeエミュレーションを優先し、LobbyやMenuなしで中央付近へSpawnし、標準Touch移動 / ジャンプで平坦な床を自由に移動できることを確認します。PC操作は補助確認とします。

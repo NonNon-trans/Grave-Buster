@@ -10,11 +10,28 @@
       "$className": "StarterPlayer",
       "StarterPlayerScripts": {
         "$className": "StarterPlayerScripts",
-        "$path": "src/client"
+        "Bootstrap": {
+          "$path": "src/client/Bootstrap.client.lua"
+        }
       }
     },
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
+      "Client": {
+        "$className": "Folder",
+        "CombatController": {
+          "$path": "src/client/CombatController.lua"
+        },
+        "HoldState": {
+          "$path": "src/client/HoldState.lua"
+        },
+        "WaveHud": {
+          "$path": "src/client/WaveHud.lua"
+        },
+        "WeaponPresenter": {
+          "$path": "src/client/WeaponPresenter.lua"
+        }
+      },
       "Shared": {
         "$path": "src/shared"
       }

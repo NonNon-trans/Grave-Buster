@@ -5,8 +5,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
-local HoldState = require(script.Parent.HoldState)
-local WeaponPresenter = require(script.Parent.WeaponPresenter)
+local HoldState = require(script.Parent:WaitForChild("HoldState"))
+local WeaponPresenter = require(script.Parent:WaitForChild("WeaponPresenter"))
 
 local CombatController = {}
 local player = Players.LocalPlayer
