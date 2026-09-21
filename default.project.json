@@ -28,6 +28,9 @@
         "OwnedWeaponSource": {
           "$path": "src/client/OwnedWeaponSource.lua"
         },
+        "ShopController": {
+          "$path": "src/client/ShopController.lua"
+        },
         "WaveHud": {
           "$path": "src/client/WaveHud.lua"
         },

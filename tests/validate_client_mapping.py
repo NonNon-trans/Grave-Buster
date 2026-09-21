@@ -49,6 +49,7 @@ def validate(place_path: str) -> None:
         "CombatController",
         "HoldState",
         "OwnedWeaponSource",
+        "ShopController",
         "WaveHud",
         "WeaponPresenter",
         "WeaponSwitcher",
@@ -65,6 +66,8 @@ def validate(place_path: str) -> None:
         'ReplicatedStorage:WaitForChild("Client")',
         'clientModules:WaitForChild("WaveHud")',
         'clientModules:WaitForChild("CombatController")',
+        'clientModules:WaitForChild("ShopController")',
+        "ShopController.Start(CombatController)",
     )
     for fragment in required_bootstrap_fragments:
         assert fragment in bootstrap_source, f"Bootstrap does not resolve {fragment}"
@@ -91,8 +94,50 @@ def validate(place_path: str) -> None:
 
     switcher_source = source_of(modules["WeaponSwitcher"])
     assert 'script.Parent:WaitForChild("WeaponSwitcherRules")' in switcher_source
+    assert "requested and requested ~= cursor" in switcher_source
     owned_source = source_of(modules["OwnedWeaponSource"])
-    assert "table.clone(WeaponConfig.Order)" in owned_source
+    assert "ApplyAuthoritativeState" in owned_source
+    assert "WeaponConfig.DefaultWeapon" in owned_source
+    shop_controller_source = source_of(modules["ShopController"])
+    for fragment in (
+        'script.Parent:WaitForChild("OwnedWeaponSource")',
+        'WaitForChild("PurchaseRequest")',
+        "OwnedWeaponSource.ApplyAuthoritativeState(state)",
+        "combatController.SetShopOpen(isOpen)",
+        "purchaseRemote:InvokeServer(weaponId)",
+        "local started = false",
+        'playerGui:FindFirstChild("GraveBusterShopGui")',
+        "previous:Destroy()",
+        "player:GetAttributeChangedSignal(\"EquippedWeapon\")",
+        "if isOpen then",
+        "syncState()",
+    ):
+        assert fragment in shop_controller_source, f"ShopController does not resolve {fragment}"
+
+    shared = direct_child(replicated_storage, "Shared", "Folder")
+    direct_child(shared, "ShopConfig", "ModuleScript")
+
+    server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
+    server_modules = {}
+    for name in ("CombatService", "ShopRules", "ShopService", "ShopSessionStore"):
+        server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
+    server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
+    server_bootstrap_source = source_of(server_bootstrap)
+    for fragment in (
+        "require(script.Parent.ShopService)",
+        "ShopService.Start()",
+        "CombatService.Start(ZombieService, ShopService)",
+    ):
+        assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
+    shop_service_source = source_of(server_modules["ShopService"])
+    for fragment in (
+        "ShopRules.TryPurchase(session, weaponId, ShopConfig)",
+        "store:Remove(player)",
+        "purchaseLocks[player]",
+    ):
+        assert fragment in shop_service_source, f"ShopService contract missing: {fragment}"
+    combat_service_source = source_of(server_modules["CombatService"])
+    assert "shopService.IsOwned(player, requestedWeapon)" in combat_service_source
 
     for name, module in modules.items():
         source = source_of(module)
@@ -112,8 +157,8 @@ def validate(place_path: str) -> None:
     print(
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
-        "-> OwnedWeaponSource / WeaponSwitcher / HoldState / WeaponPresenter; "
-        "WeaponSwitcherRules and WaveHud also resolved"
+        "/ ShopController -> OwnedWeaponSource / WeaponSwitcher; "
+        "ServerScriptService.Bootstrap -> ShopService / CombatService also resolved"
     )
 
 
