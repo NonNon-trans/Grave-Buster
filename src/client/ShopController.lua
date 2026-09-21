@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ShopConfig = require(ReplicatedStorage.Shared.ShopConfig)
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
 local OwnedWeaponSource = require(script.Parent:WaitForChild("OwnedWeaponSource"))
+local ShopPresentation = require(script.Parent:WaitForChild("ShopPresentation"))
 
 local ShopController = {}
 local player = Players.LocalPlayer
@@ -95,21 +96,39 @@ function ShopController.Start(combatController)
 	panel.Parent = overlay
 	addCorner(panel, 16)
 	local panelConstraint = Instance.new("UISizeConstraint")
-	panelConstraint.MinSize = Vector2.new(480, 270)
+	panelConstraint.MinSize = Vector2.new(ShopPresentation.Layout.PanelMinWidth, 270)
 	panelConstraint.MaxSize = Vector2.new(720, 400)
 	panelConstraint.Parent = panel
 
-	local title = makeLabel(panel, "Title", "WEAPON SHOP", UDim2.fromOffset(180, 42), UDim2.fromOffset(18, 8), 22)
+	local title = makeLabel(
+		panel,
+		"Title",
+		"WEAPON SHOP",
+		UDim2.fromOffset(ShopPresentation.Layout.TitleWidth, 42),
+		UDim2.fromOffset(ShopPresentation.Layout.TitleLeft, ShopPresentation.Layout.HeaderTop),
+		22
+	)
 	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 12
 	local currencyLabel = makeLabel(
 		panel,
 		"Currency",
-		"COINS: 0",
-		UDim2.fromOffset(160, 42),
-		UDim2.new(1, -260, 0, 8),
+		ShopPresentation.FormatCurrency(0),
+		UDim2.fromOffset(ShopPresentation.Layout.CurrencyWidth, ShopPresentation.Layout.HeaderHeight),
+		UDim2.new(1, -ShopPresentation.Layout.CurrencyRight, 0, ShopPresentation.Layout.HeaderTop),
 		20
 	)
+	currencyLabel.AnchorPoint = Vector2.new(1, 0)
 	currencyLabel.TextXAlignment = Enum.TextXAlignment.Right
+	currencyLabel.TextScaled = true
+	currencyLabel.BackgroundTransparency = 0.15
+	currencyLabel.BackgroundColor3 = Color3.fromRGB(46, 51, 50)
+	currencyLabel.ZIndex = ShopPresentation.Layout.HeaderZIndex
+	addCorner(currencyLabel, 9)
+	local currencyTextConstraint = Instance.new("UITextSizeConstraint")
+	currencyTextConstraint.MinTextSize = 15
+	currencyTextConstraint.MaxTextSize = 20
+	currencyTextConstraint.Parent = currencyLabel
 
 	local closeButton = Instance.new("TextButton")
 	closeButton.Name = "CloseButton"
@@ -192,7 +211,7 @@ function ShopController.Start(combatController)
 	end
 
 	local function render()
-		currencyLabel.Text = string.format("COINS: %d", OwnedWeaponSource.GetCurrency())
+		currencyLabel.Text = ShopPresentation.FormatCurrency(OwnedWeaponSource.GetCurrency())
 		local owned = makeOwnedSet()
 		local equipped = confirmedEquipped
 		for _, weaponId in ShopConfig.Order do

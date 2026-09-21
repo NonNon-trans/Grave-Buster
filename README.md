@@ -43,6 +43,7 @@ Grave-Buster/
 │   │   ├── HoldState.lua
 │   │   ├── OwnedWeaponSource.lua
 │   │   ├── ShopController.lua
+│   │   ├── ShopPresentation.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
@@ -60,6 +61,7 @@ Grave-Buster/
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
 │   ├── ShopConfig.spec.luau
+│   ├── ShopPresentation.spec.luau
 │   ├── ShopRules.spec.luau
 │   ├── ShopSessionStore.spec.luau
 │   ├── WeaponConfig.spec.luau
@@ -215,6 +217,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Server authority: `ShopService`がPlayerごとのSession state、revision、purchase lockを所有します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、残高、request shapeを検証します。同一callback内にyieldを挟まずCurrency更新とownership grantを完結します。
 - State sync: `GetState`でCurrency / Owned Weapons / Equipped Weapon / Revisionを取得し、購入成功時は`StateChanged`とPurchase responseでsnapshotを返します。Clientは新しいrevisionだけを`OwnedWeaponSource`へ適用します。
 - SHOP button: `CoreUISafeInsets`内の右上、112×46 px。Shop Panelは中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
+- Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
 - Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
 - Combat interaction: Shop open時にHold-to-Attackを停止し、ATTACKとSwitcherを隠します。Closeで即復帰しますがAttackは自動再開しません。Server Wave / Zombie simulationは停止しません。
 - Failure: 残高不足は`NOT ENOUGH COINS`、既購入はServerでrejectします。Client pending guardとServer purchase lockによりrapid double-purchaseを防止します。

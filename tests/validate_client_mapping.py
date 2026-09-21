@@ -50,6 +50,7 @@ def validate(place_path: str) -> None:
         "HoldState",
         "OwnedWeaponSource",
         "ShopController",
+        "ShopPresentation",
         "WaveHud",
         "WeaponPresenter",
         "WeaponSwitcher",
@@ -101,6 +102,7 @@ def validate(place_path: str) -> None:
     shop_controller_source = source_of(modules["ShopController"])
     for fragment in (
         'script.Parent:WaitForChild("OwnedWeaponSource")',
+        'script.Parent:WaitForChild("ShopPresentation")',
         'WaitForChild("PurchaseRequest")',
         "OwnedWeaponSource.ApplyAuthoritativeState(state)",
         "combatController.SetShopOpen(isOpen)",
@@ -111,8 +113,24 @@ def validate(place_path: str) -> None:
         "player:GetAttributeChangedSignal(\"EquippedWeapon\")",
         "if isOpen then",
         "syncState()",
+        'makeLabel(\n\t\tpanel,\n\t\t"Currency"',
+        "currencyLabel.ZIndex = ShopPresentation.Layout.HeaderZIndex",
+        "currencyLabel.Text = ShopPresentation.FormatCurrency(OwnedWeaponSource.GetCurrency())",
     ):
         assert fragment in shop_controller_source, f"ShopController does not resolve {fragment}"
+
+    shop_presentation_source = source_of(modules["ShopPresentation"])
+    for fragment in (
+        'CurrencyPrefix = "COINS"',
+        "CurrencyRight = 108",
+        "HeaderZIndex = 13",
+        'return string.format("%s: %d"',
+        "currencyLeftAtMinimumWidth > titleRight",
+        "currencyRightGap >= 8",
+    ):
+        assert fragment in shop_presentation_source, (
+            f"ShopPresentation currency visibility contract missing: {fragment}"
+        )
 
     shared = direct_child(replicated_storage, "Shared", "Folder")
     direct_child(shared, "ShopConfig", "ModuleScript")

@@ -31,6 +31,9 @@
         "ShopController": {
           "$path": "src/client/ShopController.lua"
         },
+        "ShopPresentation": {
+          "$path": "src/client/ShopPresentation.lua"
+        },
         "WaveHud": {
           "$path": "src/client/WaveHud.lua"
         },
