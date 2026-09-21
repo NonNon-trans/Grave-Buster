@@ -2,7 +2,7 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-006 — Feel & Feedback**
+現在Phase: **GB-007 — Integration & QA / Release Candidate**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -16,7 +16,7 @@ Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon 
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-GB-005でもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、上部中央にWave表示、右上にSHOP buttonを置きます。
+v0.1 RCでもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、上部中央にWave表示、左上にKills、右上にSHOP buttonを置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
@@ -139,7 +139,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-006の作業branchは`phase/GB-006-feel-feedback`です。
+GB-007の作業branchは`phase/GB-007-integration-qa`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -236,6 +236,13 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。左上Safe Areaの116×36 px `KILLS N`表示へ反映し、Character Resetでは維持、Leave / Rejoinでは0へ戻ります。Currency / Rewardとは接続しません。
 - Wave emphasis: 既存132×32 px表示を維持し、Wave更新時だけ0.55秒間1.16倍・背景を明瞭化し、0.35秒で通常表示へ戻します。巨大Bannerは追加しません。
 - Camera / Audio: Mobile camera操作と連続attackの安定性を優先してCamera shakeは追加しません。信頼できるAsset IDを新規導入しないためAudioも追加しません。
+
+## v0.1 Release Candidate Gate（GB-007）
+
+- Frozen scope: Arena、cap 28のZombie Horde、5 Weaponsの一撃Combat、Trail、Wave / Kills、Weapon Switcher、Session Shopをv0.1 contractとして固定します。Hit Flash、Player Damage、Kill Reward、Persistence、Audioは含みません。
+- Static gate: Rojo build、全Luau compile、全spec、generated hierarchy、Arena / Horde / Combat / Switcher / Shop / Feedback regression、`git diff --check`を通過させます。
+- RC artifact: `build/Grave-Buster-v0.1-RC.rbxlx`。`build/`はGit ignore対象で、Published TEST ExperienceへPublishする入力です。
+- Release gate: Release Blocker 0件かつStatic gate PASS後、Physical Mobile DeviceのLandscapeでJoinからLeave / RejoinまでのE2Eを実施します。Published Mobile E2E PASS後にv0.1をRelease Readyとします。
 
 Static test:
 
