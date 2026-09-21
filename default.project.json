@@ -25,11 +25,20 @@
         "HoldState": {
           "$path": "src/client/HoldState.lua"
         },
+        "OwnedWeaponSource": {
+          "$path": "src/client/OwnedWeaponSource.lua"
+        },
         "WaveHud": {
           "$path": "src/client/WaveHud.lua"
         },
         "WeaponPresenter": {
           "$path": "src/client/WeaponPresenter.lua"
+        },
+        "WeaponSwitcher": {
+          "$path": "src/client/WeaponSwitcher.lua"
+        },
+        "WeaponSwitcherRules": {
+          "$path": "src/client/WeaponSwitcherRules.lua"
         }
       },
       "Shared": {
