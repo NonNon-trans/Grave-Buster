@@ -2,21 +2,21 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-001 — Arena & Immediate Start**
+現在Phase: **GB-002 — Zombie Horde**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
 Thunder Battleとは独立した新規Projectです。
 
-GB-000のGit / Rojo基盤に、平坦な墓場Arena・昼の薄霧・中央Spawnを追加しています。
+GB-000のGit / Rojo基盤とGB-001の墓場Arenaに、Damageを与えないZombie Hordeと時間制Waveを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
-Zombie、Weapon、Combat、UI、Economy、DataStoreは未実装です。
-Server BootstrapがArenaを生成し、Server / Clientそれぞれのロード完了ログも維持しています。
+Weapon、Combat、Economy、DataStoreは未実装です。ZombieはPlayerへ接近しますが攻撃しません。
+Zombie lifecycleとWave progressionはServer Authority、Clientは小さなWave表示だけを担当します。
 
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-GB-001ではRoblox標準Mobile movementを使用し、新しいMobile UIやInputは追加しません。
+GB-002でもRoblox標準Mobile movementを使用します。追加UIは画面上部中央の小さなWave表示だけです。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-001ではCollision Groupや例外処理も追加せず、将来Phaseで検討します。
@@ -28,11 +28,19 @@ Grave-Buster/
 ├── src/
 │   ├── server/
 │   │   ├── ArenaService.lua
+│   │   ├── ZombieRules.lua
+│   │   ├── ZombieService.lua
+│   │   ├── WaveService.lua
 │   │   └── Bootstrap.server.lua
 │   ├── client/
+│   │   ├── WaveHud.lua
 │   │   └── Bootstrap.client.lua
 │   └── shared/
+│       ├── HordeConfig.lua
 │       └── ProjectInfo.lua
+├── tests/
+│   ├── HordeConfig.spec.luau
+│   └── ZombieRules.spec.luau
 ├── default.project.json
 ├── rokit.toml
 ├── README.md
@@ -41,9 +49,9 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena生成。将来: Zombie lifecycle、authoritative combat、Wave、purchase validation |
-| `src/client` | `StarterPlayer.StarterPlayerScripts` | ロードログ。将来: Input、HUD、effects、camera |
-| `src/shared` | `ReplicatedStorage.Shared` | Project情報。将来: constants、contracts、types/config |
+| `src/server` | `ServerScriptService` | Arena生成、Zombie lifecycle / target / movement、Wave progression |
+| `src/client` | `StarterPlayer.StarterPlayerScripts` | ロードログ、最小Wave HUD。将来: Input、effects、camera |
+| `src/shared` | `ReplicatedStorage.Shared` | Project情報とHorde定数・純粋なWave / cap / lifetime規則 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
 現時点ではフレームワーク、RemoteEvent、将来用の空Service等は追加しません。
@@ -97,7 +105,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-001の作業branchは`phase/GB-001-arena-start`です。
+GB-002の作業branchは`phase/GB-002-zombie-horde`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -124,6 +132,35 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 [Clouds](https://create.roblox.com/docs/reference/engine/classes/Clouds)、
 [ColorCorrectionEffect](https://create.roblox.com/docs/reference/engine/classes/ColorCorrectionEffect)。
 
+## Zombie Horde仕様（GB-002）
+
+- Zombie model: 外部Assetを使わない7-Partの簡易R6型Humanoid。Green skin、暗い紫Grayの胴、暗い脚でPlayerと区別します。MaxHealth / Healthは固定1で、Wave別HP・Armor・Typeはありません。
+- Walk visual: 外部Animation IDを使わず、中央AI更新内で非衝突・Masslessの腕脚4本のMotor6D C0を動かします。Attack Animationはありません。
+- Spawn: 境界内側のX/Z=±76、各辺8 lane（-60〜60）の計32地点をround-robin。Player Spawn (±10,±10)から最低約66 studs離れ、墓石・透明境界の内側から四方向に出現します。
+- Target: Character、alive Humanoid、HumanoidRootPartが揃うPlayerのうち最寄り。0.75秒ごとに再評価し、現在TargetがReset / Death / Leaveで無効になった場合は次の0.25秒AI tickで即再取得します。Player不在時は停止し、Waveも待機します。
+- Movement: 平坦Arena向けの`Humanoid:MoveTo()`による直線追跡。Pathfindingなし。WalkSpeedは全Wave固定8。14方向×2 ringの28接近offset（半径5.5 / 8）と停止距離2.5で、Active cap内の全Zombieに異なる目的位置を割り当て、Player目前の完全重複・振動を抑えます。
+- Collision / authority: `Zombie` CollisionGroup同士は非衝突、Ground / Playerとは通常衝突。Zombie physicsはServer network ownership。Damage、Attack、Touched処理、Damage Remoteはありません。
+- AI cost: 全Zombie共通loopを0.25秒（4 Hz）で更新。ZombieごとのHeartbeat / connection、毎Frame target search、高頻度Pathfinding、Zombie同士の全組み合わせ計算はありません。
+- Mobile part budget: Zombie 1体は7 BaseParts、Active cap時は最大196 dynamic BaseParts / 28 Humanoids。装飾用Accessory、Mesh、Particle、個別Billboardは追加していません。腕脚のwalk visualも同じ4 Hz loopで更新します。
+- Wave: 有効Player検出後3秒で開始。Wave 1は6体、以後+3体、1 Wave最大24体。Spawn間隔0.65秒、Wave間2.5秒。ZombieのHP / Speed / Damageは増加しません。WaveはServerの`ReplicatedStorage.WaveNumber`に複製し、Clientは上部中央132×32 pxの表示だけを行います。
+- Active cap: 28体。208×208 Arenaで大群感を保ちつつ、Mobile上のHumanoid / Partコストを抑える値です。Cap中のspawn slotはskipし、無制限生成しません。
+- Cleanup: Spawnから30秒でdespawn。倒せないGB-002でも古いZombieが循環し、Capと併用してHuman Gateを継続できます。Health 0、Model消失、Arena下への落下も中央loopでcleanupします。
+- GB-003接続: ZombieはModel / Humanoid / PrimaryPartを持ち、BreakJointsOnDeath=false、active registryをServerが所有します。`ZombieService.Release(model)`はModelを破棄せずAI・registry・capから安全に外すhandoff seamで、将来のone-hit defeat時にRootへPhysics launchを与えられます。GB-002では呼び出さず、Knockbackも未実装です。
+
+設定値と純粋規則は`src/shared/HordeConfig.lua`、生成・移動・cleanupは`ZombieService`、Target検証は`ZombieRules`、時間制進行は`WaveService`です。ECS、NPC framework、Behavior Treeは導入していません。
+
+Static test:
+
+```sh
+build/luau-tools/luau tests/HordeConfig.spec.luau
+build/luau-tools/luau tests/HordeSimulation.spec.luau
+build/luau-tools/luau tests/ZombieRules.spec.luau
+```
+
+API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Humanoid)、
+[PhysicsService](https://create.roblox.com/docs/reference/engine/classes/PhysicsService)、
+[BasePart network ownership](https://create.roblox.com/docs/reference/engine/classes/BasePart#SetNetworkOwner)。
+
 ## Human Studio Check（GB-001）
 
 1. 上記buildコマンドを実行し、`build/Grave-Buster.rbxlx`をStudioで開きます。
@@ -139,5 +176,19 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 10. Stop → Playを繰り返し、Arenaが重複しないことと、Outputにエラーがないことを確認します。
 11. `git diff --check`と`git status --short`で確認用変更や生成物が残っていないことを確認し、Human / Reviewer Gateの結果を記録します。
 
-Rojo build成功だけではStudio実行時の動作・見た目は保証されません。GB-002へ進む前に上記Gateを完了してください。
-Human GateではFog・Boundary・Arena size・Ground・Spawn / RespawnがPASS、Runtime Errorなしを確認済みです。Atmosphere方式はHorizonを明るくしたためREJECTされ、削除しました。再構成したGray horizonを含む曇天のSky / LightingはMobile Landscapeで視覚確認待ちです。この確認がPASSするまでGB-001をCLOSEしません。
+上記GB-001項目はGB-002でのEnvironment regression確認として維持します。GB-001自体はHuman Gate PASS / CLOSED済みです。
+
+## Human Studio Check（GB-002）
+
+1. buildしたPlaceをStudioで開くかRojo同期後にStop → Playし、Mobile Landscape emulationを有効にします。
+2. Arenaへ直接Spawnし、約3秒後に外周内側の複数方向からZombieが順次出現することを確認します。
+3. ZombieがPlayerへ歩き、目前の複数位置で停止・追従すること、激しい左右jitterや完全な一点重複がないことを確認します。
+4. Zombieへ触れてもPlayer Healthが減らず、Attack / Killが発生しないことを確認します。
+5. 上部中央の`GET READY`が`WAVE 1`へ変わり、その後Waveが自動進行すること、初期Waveほどspawn数が少ないことを確認します。
+6. Server Explorerで`Workspace.Zombies`の直接の子を数え、28体を超えないことを確認します。約30秒を超えた古いZombieが消え、新規Zombieと入れ替わることを確認します。
+7. Character Reset後、新Characterへ追跡が切り替わり、Errorが出ないことを確認します。可能なら2 Clientで最寄りの生存Playerを選ぶことと、片方のLeave後も継続することを確認します。
+8. Mobile Landscapeの低・標準画質でZombieがPlayerと区別でき、大群の方向が分かり、Frame rateに明確な異常低下がないことを確認します。
+9. GB-001のBrown Ground、墓石境界、Gray overcast、Fog、Clouds、ColorCorrection、Spawn / Respawnが維持されていることを確認します。
+10. Stop → Playを繰り返し、`Workspace.Zombies`、`WaveNumber`、Wave HUD、loopが重複せず、OutputにRuntime Errorがないことを確認します。
+
+Rojo buildと静的testだけではHumanoid physics、replicated walk visual、Mobile frame rateを保証できません。GB-003へ進む前にこのHuman / Reviewer Gateを完了してください。
