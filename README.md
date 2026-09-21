@@ -2,24 +2,24 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-002 — Zombie Horde**
+現在Phase: **GB-003 — Core Weapon Combat**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
 Thunder Battleとは独立した新規Projectです。
 
-GB-000のGit / Rojo基盤とGB-001の墓場Arenaに、Damageを与えないZombie Hordeと時間制Waveを追加しています。
+GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
-Weapon、Combat、Economy、DataStoreは未実装です。ZombieはPlayerへ接近しますが攻撃しません。
-Zombie lifecycleとWave progressionはServer Authority、Clientは小さなWave表示だけを担当します。
+5種類のWeaponはRange・Hit shape・Knockbackで差別化し、ZombieはPlayerへ接近しますが攻撃しません。
+Combat result、Zombie lifecycle、Wave progressionはServer Authorityです。Shop、Currency、DataStoreは未実装です。
 
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-GB-002でもRoblox標準Mobile movementを使用します。追加UIは画面上部中央の小さなWave表示だけです。
+GB-003でもRoblox標準Mobile movementを使用します。右側にAttack buttonと一時的なDEV Weapon切替、上部中央に小さなWave表示を置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
-これはPlayer boundaryとは別契約です。GB-001ではCollision Groupや例外処理も追加せず、将来Phaseで検討します。
+これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
 
 ## Repository structure
 
@@ -27,19 +27,31 @@ Future note（未実装）: 一定確率または特殊AttackでZombieを「ホ�
 Grave-Buster/
 ├── src/
 │   ├── server/
+│   │   ├── ActiveZombieRegistry.lua
 │   │   ├── ArenaService.lua
+│   │   ├── CombatRules.lua
+│   │   ├── CombatService.lua
 │   │   ├── ZombieRules.lua
 │   │   ├── ZombieService.lua
 │   │   ├── WaveService.lua
 │   │   └── Bootstrap.server.lua
 │   ├── client/
+│   │   ├── CombatController.lua
+│   │   ├── HoldState.lua
+│   │   ├── WeaponPresenter.lua
 │   │   ├── WaveHud.lua
 │   │   └── Bootstrap.client.lua
 │   └── shared/
 │       ├── HordeConfig.lua
+│       ├── WeaponConfig.lua
 │       └── ProjectInfo.lua
 ├── tests/
+│   ├── ActiveZombieRegistry.spec.luau
+│   ├── CombatRules.spec.luau
+│   ├── HoldState.spec.luau
 │   ├── HordeConfig.spec.luau
+│   ├── HordeSimulation.spec.luau
+│   ├── WeaponConfig.spec.luau
 │   └── ZombieRules.spec.luau
 ├── default.project.json
 ├── rokit.toml
@@ -49,12 +61,14 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena生成、Zombie lifecycle / target / movement、Wave progression |
-| `src/client` | `StarterPlayer.StarterPlayerScripts` | ロードログ、最小Wave HUD。将来: Input、effects、camera |
-| `src/shared` | `ReplicatedStorage.Shared` | Project情報とHorde定数・純粋なWave / cap / lifetime規則 |
+| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、attack検証、hit query、defeat / physics cleanup |
+| `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、local weapon presentation、DEV selector、Wave HUD |
+| `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde設定、Weapon tuning |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
-現時点ではフレームワーク、RemoteEvent、将来用の空Service等は追加しません。
+Combat intentとDEV equip requestだけを`ReplicatedStorage.CombatRemotes`でServerへ送ります。Clientはhit targetやdefeat結果を指定できません。
+Client ModuleScriptはStarter containerのruntime cloneへ依存せず、`ReplicatedStorage.Client`の安定したhierarchyからBootstrapがrequireします。
 
 ## Toolchain
 
@@ -105,7 +119,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-002の作業branchは`phase/GB-002-zombie-horde`です。
+GB-003の作業branchは`phase/GB-003-core-combat`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -144,10 +158,30 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Mobile part budget: Zombie 1体は7 BaseParts、Active cap時は最大196 dynamic BaseParts / 28 Humanoids。装飾用Accessory、Mesh、Particle、個別Billboardは追加していません。腕脚のwalk visualも同じ4 Hz loopで更新します。
 - Wave: 有効Player検出後3秒で開始。Wave 1は6体、以後+3体、1 Wave最大24体。Spawn間隔0.65秒、Wave間2.5秒。ZombieのHP / Speed / Damageは増加しません。WaveはServerの`ReplicatedStorage.WaveNumber`に複製し、Clientは上部中央132×32 pxの表示だけを行います。
 - Active cap: 28体。208×208 Arenaで大群感を保ちつつ、Mobile上のHumanoid / Partコストを抑える値です。Cap中のspawn slotはskipし、無制限生成しません。
-- Cleanup: Spawnから30秒でdespawn。倒せないGB-002でも古いZombieが循環し、Capと併用してHuman Gateを継続できます。Health 0、Model消失、Arena下への落下も中央loopでcleanupします。
-- GB-003接続: ZombieはModel / Humanoid / PrimaryPartを持ち、BreakJointsOnDeath=false、active registryをServerが所有します。`ZombieService.Release(model)`はModelを破棄せずAI・registry・capから安全に外すhandoff seamで、将来のone-hit defeat時にRootへPhysics launchを与えられます。GB-002では呼び出さず、Knockbackも未実装です。
+- Cleanup: GB-002専用の30秒Lifetimeは撤廃済みです。ACTIVE Zombieは時間だけでは消えず、Playerの処理が遅ければ28体のcapまで蓄積します。Model消失、Health 0、Arena下への落下は中央loopでcleanupします。
+- Combat接続: `ZombieService.Release(model)`はModelを破棄せずAI・registry・capから即座に外します。CombatServiceがその後のphysics launchと短時間後のcleanupを所有するため、吹っ飛び中のModelは新規spawn用のactive slotを占有しません。
 
 設定値と純粋規則は`src/shared/HordeConfig.lua`、生成・移動・cleanupは`ZombieService`、Target検証は`ZombieRules`、時間制進行は`WaveService`です。ECS、NPC framework、Behavior Treeは導入していません。
+
+## Core Weapon Combat仕様（GB-003）
+
+- Input: 標準Jump buttonを避けた画面右側の112×112 px `ATTACK` button。Touch beginで即attackし、保持中は現在Weaponのintervalで繰り返し、release / cancel / Character reset / Weapon切替でloopを停止します。画面下部中央はGB-004用に空けています。
+- Authority: Clientは引数なしのattack intentだけを送信します。ServerはPlayer、alive Character、Server上のequipped weapon、Server時計によるintervalを検証し、target query・defeat・knockback・cleanupを決定します。不正なWeapon名は拒否します。
+- Hit query: `Workspace:GetPartBoundsInBox` / `GetPartBoundsInRadius`とInclude filterで`Workspace.Zombies`だけを検索し、Model単位でdeduplicateします。ACTIVE registryにないReleased Zombie、Player、墓石、Arena geometryは対象外です。
+- Defeat lifecycle: ACTIVE → `ZombieService.Release` → cap slot解放 → DEFEATED → server-owned physics impulse → 1.8〜2.4秒表示 → Debris cleanup。同じZombieの二重Releaseはregistryが拒否します。
+- Collision: Defeated rigは全BasePartを非衝突・非Touchにし、`DefeatedZombie` groupへ移します。PlayerやHordeを押さず、Player用透明boundaryにも阻まれないため、将来の場外Home Runへ拡張できます。
+- Presentation: 外部Asset IDなし。5種類のprimitive weaponをLocal Characterの右手へMotor6Dで保持し、attack時はlocal procedural swingを再生します。Server gameplayをAnimation timingへ依存させません。
+- DEV selection: 右側の小さな`DEV:` buttonでBat → Pan → Hammer → Blower → Thunder Rodを循環します。正式Carousel、ownership、Shop処理は含みません。選択はPlayer attributeに保持され、respawn後も同じSession内で復元します。
+
+| Weapon | Interval | Hit shape / range | Max | Knockback H / V | Physics表示 |
+| --- | ---: | --- | ---: | ---: | ---: |
+| Baseball Bat | 0.34s | 前方Box 10、幅8 | 6 | 68 / 30 | 2.0s |
+| Frying Pan | 0.38s | 前方Box 9、幅13 | 8 | 60 / 24、左右へ散開 | 2.0s |
+| Giant Hammer | 0.55s | 前方寄りRadius 7.5 | 10 | 74 / 48 | 2.4s |
+| Blower | 0.28s | 前方Cone近似 17、幅16 | 12 | 80 / 18、外向き | 1.8s |
+| Thunder Rod | 0.42s | 前方11から半径11でchain | 8 | 62 / 34、各target外向き | 2.1s |
+
+全Weaponは固定Health 1のZombieを一撃でdefeatします。Damage number、HP scaling、Player damageはありません。Waveは6 → 9 → 12 → 15 → 18 → 21 → 24を維持し、transitionで生存Zombieを消しません。cap中のspawn slotはskipされ、defeatでslotが空けば以後のscheduleから再供給されます。
 
 Static test:
 
@@ -155,6 +189,11 @@ Static test:
 build/luau-tools/luau tests/HordeConfig.spec.luau
 build/luau-tools/luau tests/HordeSimulation.spec.luau
 build/luau-tools/luau tests/ZombieRules.spec.luau
+build/luau-tools/luau tests/WeaponConfig.spec.luau
+build/luau-tools/luau tests/CombatRules.spec.luau
+build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
+build/luau-tools/luau tests/HoldState.spec.luau
+python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
 API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Humanoid)、
@@ -164,7 +203,7 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 ## Human Studio Check（GB-001）
 
 1. 上記buildコマンドを実行し、`build/Grave-Buster.rbxlx`をStudioで開きます。
-2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Shared.ProjectInfo`がModuleScriptであることを確認します。
+2. Explorerで`ServerScriptService.Bootstrap`がScript、`StarterPlayer.StarterPlayerScripts.Bootstrap`がLocalScript、`ReplicatedStorage.Client`に`CombatController`、`HoldState`、`WaveHud`、`WeaponPresenter`がModuleScriptとして存在することを確認します。`ReplicatedStorage.Shared.ProjectInfo`もModuleScriptであることを確認します。
 3. `ServerScriptService.ArenaService`もModuleScriptであることを確認します。上記serveを起動し、Rojo pluginを接続します。接続・同期エラーがないことを確認します。
 4. Playを開始し、Outputに`[Grave Buster] Server loaded (v0.1 development)`と`[Grave Buster] Client loaded (v0.1 development)`が表示され、script errorがないことを確認します。Client確認にはRunではなくPlayを使用します。
 5. Mobile Landscapeエミュレーションを優先し、LobbyやMenuなしで中央付近へSpawnし、標準Touch移動 / ジャンプで平坦な床を自由に移動できることを確認します。PC操作は補助確認とします。
@@ -185,10 +224,25 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 3. ZombieがPlayerへ歩き、目前の複数位置で停止・追従すること、激しい左右jitterや完全な一点重複がないことを確認します。
 4. Zombieへ触れてもPlayer Healthが減らず、Attack / Killが発生しないことを確認します。
 5. 上部中央の`GET READY`が`WAVE 1`へ変わり、その後Waveが自動進行すること、初期Waveほどspawn数が少ないことを確認します。
-6. Server Explorerで`Workspace.Zombies`の直接の子を数え、28体を超えないことを確認します。約30秒を超えた古いZombieが消え、新規Zombieと入れ替わることを確認します。
+6. Server ExplorerでACTIVE Zombieが28体を超えないことを確認します。GB-003では30秒を超えたZombieも時間だけでは消えず、defeatされたZombieだけが短いphysics表示後に消えることを確認します。
 7. Character Reset後、新Characterへ追跡が切り替わり、Errorが出ないことを確認します。可能なら2 Clientで最寄りの生存Playerを選ぶことと、片方のLeave後も継続することを確認します。
 8. Mobile Landscapeの低・標準画質でZombieがPlayerと区別でき、大群の方向が分かり、Frame rateに明確な異常低下がないことを確認します。
 9. GB-001のBrown Ground、墓石境界、Gray overcast、Fog、Clouds、ColorCorrection、Spawn / Respawnが維持されていることを確認します。
 10. Stop → Playを繰り返し、`Workspace.Zombies`、`WaveNumber`、Wave HUD、loopが重複せず、OutputにRuntime Errorがないことを確認します。
 
-Rojo buildと静的testだけではHumanoid physics、replicated walk visual、Mobile frame rateを保証できません。GB-003へ進む前にこのHuman / Reviewer Gateを完了してください。
+このGB-002手順はWave / Horde regression確認としてGB-003でも維持します。
+
+## Human Studio Check（GB-003）
+
+1. buildしたPlaceをStudioで開き、Device EmulatorをMobile LandscapeにしてPlayします。LobbyなしでSpawnし、3秒後からWaveが始まることを確認します。
+2. 右側の`ATTACK`をtapし、即座にweapon swingが見えることを確認します。移動しながら押せること、長押し中は連続attackし、指を離すと即停止することを確認します。
+3. `DEV:` buttonを押し、BASEBALL BAT / FRYING PAN / GIANT HAMMER / BLOWER / THUNDER RODの5種が順番に表示・装備されることを確認します。切替中にhold loopや旧modelが残らないことも確認します。
+4. Batは前方、Panは左右へ散らす、Hammerは高く重く複数、Blowerは広い前方、Thunder Rodは近傍へ連鎖することを確認します。各Weaponで複数体を一撃defeatでき、hit直後に消えず1.8〜2.4秒飛んでから消えることを確認します。
+5. Defeated ZombieがPlayerを押さず、ACTIVE ZombieのAIへ戻らず、同じtargetが二重defeatされないことを確認します。Player用墓石boundaryを越えるlaunchが可能であることも観察します。
+6. 何もattackせず30秒以上待ち、ACTIVE Zombieが時間だけでは消えずcapまで圧力が蓄積することを確認します。大量にdefeatすると空間が開き、空いたslotへ後続WaveからZombieが供給されることを確認します。
+7. Zombie接触でPlayer Healthが減らないこと、Wave表示と6 → 9 → 12…の進行が続くこと、28体のACTIVE capを超えないことを確認します。
+8. Attack hold中とWeapon切替後にCharacterをResetし、holdが残らず、respawn後に選択中Weaponが再装備されAttackが復旧することを確認します。
+9. Brown Ground、墓石境界、Gray overcast、Fog、Clouds、ColorCorrection、Spawn / Respawnが維持されていることを確認します。
+10. 低・標準画質でHordeとlaunchが読み取れ、明確なframe rate異常がないことを確認します。Stop → Playも繰り返し、Remote、GUI、foldersが重複せずOutputにRuntime Errorがないことを確認します。
+
+Static validationではserver rules、registry、hold lifecycle、config、Wave pressureを確認します。最終的なTouch feel、Humanoid physics、Knockback量、Mobile frame rateは上記Human Gateで判断してください。

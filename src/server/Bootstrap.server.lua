@@ -5,7 +5,9 @@ ArenaService.Build()
 
 local ZombieService = require(script.Parent.ZombieService)
 local WaveService = require(script.Parent.WaveService)
+local CombatService = require(script.Parent.CombatService)
 ZombieService.Start()
+CombatService.Start(ZombieService)
 WaveService.Start(ZombieService)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

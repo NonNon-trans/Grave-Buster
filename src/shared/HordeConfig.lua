@@ -8,7 +8,6 @@ local HordeConfig = {
 	WaveCountIncrement = 3,
 	MaxWaveCount = 24,
 	ActiveZombieCap = 28,
-	ZombieLifetime = 30,
 	ZombieWalkSpeed = 8,
 	AIUpdateInterval = 0.25,
 	TargetRefreshInterval = 0.75,
@@ -27,10 +26,6 @@ end
 
 function HordeConfig.CanSpawn(activeCount: number): boolean
 	return activeCount < HordeConfig.ActiveZombieCap
-end
-
-function HordeConfig.IsExpired(spawnedAt: number, now: number): boolean
-	return now - spawnedAt >= HordeConfig.ZombieLifetime
 end
 
 return table.freeze(HordeConfig)

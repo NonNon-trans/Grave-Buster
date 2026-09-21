@@ -2,42 +2,33 @@
 
 local HordeConfig = require("../src/shared/HordeConfig")
 
-local now = HordeConfig.InitialDelay
-local activeSpawnTimes: { number } = {}
+local active = 0
 local peakActive = 0
-local cleanupCount = 0
+local defeated = 0
+local spawned = 0
 local previousScheduledCount = 0
-
-local function cleanupExpired()
-	local retained = {}
-	for _, spawnedAt in activeSpawnTimes do
-		if HordeConfig.IsExpired(spawnedAt, now) then
-			cleanupCount += 1
-		else
-			table.insert(retained, spawnedAt)
-		end
-	end
-	activeSpawnTimes = retained
-end
 
 for wave = 1, 12 do
 	local scheduledCount = HordeConfig.GetWaveSpawnCount(wave)
 	assert(scheduledCount >= previousScheduledCount)
 	previousScheduledCount = scheduledCount
 	for _ = 1, scheduledCount do
-		cleanupExpired()
-		if HordeConfig.CanSpawn(#activeSpawnTimes) then
-			table.insert(activeSpawnTimes, now)
+		if HordeConfig.CanSpawn(active) then
+			active += 1
+			spawned += 1
 		end
-		peakActive = math.max(peakActive, #activeSpawnTimes)
-		assert(#activeSpawnTimes <= HordeConfig.ActiveZombieCap)
-		now += HordeConfig.SpawnInterval
+		peakActive = math.max(peakActive, active)
+		assert(active <= HordeConfig.ActiveZombieCap)
 	end
-	now += HordeConfig.Intermission
+	if wave >= 4 then
+		local releaseCount = math.min(active, 5)
+		active -= releaseCount
+		defeated += releaseCount
+	end
 end
 
-cleanupExpired()
 assert(peakActive == HordeConfig.ActiveZombieCap)
-assert(cleanupCount > 0, "Lifetime cleanup should recycle old zombies during a long session")
+assert(defeated > 0)
+assert(spawned > HordeConfig.ActiveZombieCap, "Released cap slots should accept replacement zombies")
 
-print("PASS HordeSimulation: wave growth, cap enforcement, and lifetime recycling")
+print("PASS HordeSimulation: wave growth, persistent pressure, cap enforcement, and defeat recycling")
