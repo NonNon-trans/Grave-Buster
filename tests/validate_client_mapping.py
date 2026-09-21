@@ -46,6 +46,7 @@ def validate(place_path: str) -> None:
 
     modules = {}
     for name in (
+        "CombatFeedbackController",
         "CombatController",
         "HoldState",
         "OwnedWeaponSource",
@@ -67,7 +68,9 @@ def validate(place_path: str) -> None:
         'ReplicatedStorage:WaitForChild("Client")',
         'clientModules:WaitForChild("WaveHud")',
         'clientModules:WaitForChild("CombatController")',
+        'clientModules:WaitForChild("CombatFeedbackController")',
         'clientModules:WaitForChild("ShopController")',
+        "CombatFeedbackController.Start()",
         "ShopController.Start(CombatController)",
     )
     for fragment in required_bootstrap_fragments:
@@ -99,6 +102,30 @@ def validate(place_path: str) -> None:
     owned_source = source_of(modules["OwnedWeaponSource"])
     assert "ApplyAuthoritativeState" in owned_source
     assert "WeaponConfig.DefaultWeapon" in owned_source
+
+    feedback_source = source_of(modules["CombatFeedbackController"])
+    for fragment in (
+        'WaitForChild("CombatFeedback")',
+        'local KILL_ATTRIBUTE = "SessionKills"',
+        "player:GetAttributeChangedSignal(KILL_ATTRIBUTE)",
+        "FeedbackConfig.MaxEffectsPerAttack",
+        "Debris:AddItem(trail, FeedbackConfig.TrailLifetime)",
+        "Debris:AddItem(upper, FeedbackConfig.TrailLifetime)",
+        "Debris:AddItem(lower, FeedbackConfig.TrailLifetime)",
+        "local started = false",
+        'playerGui:FindFirstChild(GUI_NAME)',
+    ):
+        assert fragment in feedback_source, f"CombatFeedbackController contract missing: {fragment}"
+    assert "Heartbeat" not in feedback_source
+
+    wave_hud_source = source_of(modules["WaveHud"])
+    for fragment in (
+        "FeedbackConfig.WaveEmphasisHold",
+        "FeedbackConfig.WaveEmphasisFade",
+        "emphasisGeneration += 1",
+        "activeTween:Cancel()",
+    ):
+        assert fragment in wave_hud_source, f"WaveHud feedback contract missing: {fragment}"
     shop_controller_source = source_of(modules["ShopController"])
     for fragment in (
         'script.Parent:WaitForChild("OwnedWeaponSource")',
@@ -133,11 +160,13 @@ def validate(place_path: str) -> None:
         )
 
     shared = direct_child(replicated_storage, "Shared", "Folder")
+    feedback_config = direct_child(shared, "FeedbackConfig", "ModuleScript")
+    assert "ImpactLifetime" not in source_of(feedback_config)
     direct_child(shared, "ShopConfig", "ModuleScript")
 
     server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
     server_modules = {}
-    for name in ("CombatService", "ShopRules", "ShopService", "ShopSessionStore"):
+    for name in ("CombatService", "KillCounter", "ShopRules", "ShopService", "ShopSessionStore"):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
     server_bootstrap_source = source_of(server_bootstrap)
@@ -156,6 +185,18 @@ def validate(place_path: str) -> None:
         assert fragment in shop_service_source, f"ShopService contract missing: {fragment}"
     combat_service_source = source_of(server_modules["CombatService"])
     assert "shopService.IsOwned(player, requestedWeapon)" in combat_service_source
+    for fragment in (
+        'local KILL_ATTRIBUTE = "SessionKills"',
+        "killCounter:Add(player, defeatCount)",
+        "feedbackRemote:FireClient(player, weaponName, feedbackRoots)",
+        "if defeatedRoot then",
+        "FeedbackConfig.GetEffectCount(config.MaxTargets)",
+        "killCounter:Remove(player)",
+    ):
+        assert fragment in combat_service_source, f"CombatService feedback contract missing: {fragment}"
+    assert "Position = hitPosition" not in combat_service_source
+    assert "createImpact" not in feedback_source
+    assert "ZombieImpactFlash" not in feedback_source
 
     for name, module in modules.items():
         source = source_of(module)
@@ -175,8 +216,8 @@ def validate(place_path: str) -> None:
     print(
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
-        "/ ShopController -> OwnedWeaponSource / WeaponSwitcher; "
-        "ServerScriptService.Bootstrap -> ShopService / CombatService also resolved"
+        "/ CombatFeedbackController / ShopController; "
+        "ServerScriptService.Bootstrap -> CombatService -> KillCounter also resolved"
     )
 
 

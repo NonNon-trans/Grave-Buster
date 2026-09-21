@@ -2,7 +2,7 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-005 — Online Weapon Shop**
+現在Phase: **GB-006 — Feel & Feedback**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -31,6 +31,7 @@ Grave-Buster/
 │   │   ├── ArenaService.lua
 │   │   ├── CombatRules.lua
 │   │   ├── CombatService.lua
+│   │   ├── KillCounter.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
 │   │   ├── ShopSessionStore.lua
@@ -40,6 +41,7 @@ Grave-Buster/
 │   │   └── Bootstrap.server.lua
 │   ├── client/
 │   │   ├── CombatController.lua
+│   │   ├── CombatFeedbackController.lua
 │   │   ├── HoldState.lua
 │   │   ├── OwnedWeaponSource.lua
 │   │   ├── ShopController.lua
@@ -51,15 +53,18 @@ Grave-Buster/
 │   │   └── Bootstrap.client.lua
 │   └── shared/
 │       ├── HordeConfig.lua
+│       ├── FeedbackConfig.lua
 │       ├── ShopConfig.lua
 │       ├── WeaponConfig.lua
 │       └── ProjectInfo.lua
 ├── tests/
 │   ├── ActiveZombieRegistry.spec.luau
 │   ├── CombatRules.spec.luau
+│   ├── FeedbackConfig.spec.luau
 │   ├── HoldState.spec.luau
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
+│   ├── KillCounter.spec.luau
 │   ├── ShopConfig.spec.luau
 │   ├── ShopPresentation.spec.luau
 │   ├── ShopRules.spec.luau
@@ -134,7 +139,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-005の作業branchは`phase/GB-005-shop`です。
+GB-006の作業branchは`phase/GB-006-feel-feedback`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -223,6 +228,15 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Failure: 残高不足は`NOT ENOUGH COINS`、既購入はServerでrejectします。Client pending guardとServer purchase lockによりrapid double-purchaseを防止します。
 - Source boundary: ShopとSwitcherは同じ`OwnedWeaponSource`をpresentation sourceとして購読し、authoritative sourceはServer sessionだけです。購入順に関係なくSwitcherは正式Weapon orderを維持します。
 
+## Feel & Feedback仕様（GB-006）
+
+- Hit / knockback feedback: Serverで実際にZombieをReleaseできたattackだけを`CombatFeedback`で攻撃Playerへ通知し、Defeated rootへ0.22秒だけ短いTrailをlocal生成します。Human Gate結果によりNeon hit flashは削除済みです。
+- Weapon identity: TrailをWeapon別に暖色 / 金属色 / Orange / Cyan / Violetへ軽微に色分けします。既存のKnockback force、hitbox、interval、physics lifetimeは変更しません。
+- Bounded effects: 1 attackの表示は最大8 Zombie分。TrailとAttachmentはDebrisで必ずcleanupし、Part、ParticleEmitter、Heartbeat、Zombie別connectionは使用しません。
+- Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。左上Safe Areaの116×36 px `KILLS N`表示へ反映し、Character Resetでは維持、Leave / Rejoinでは0へ戻ります。Currency / Rewardとは接続しません。
+- Wave emphasis: 既存132×32 px表示を維持し、Wave更新時だけ0.55秒間1.16倍・背景を明瞭化し、0.35秒で通常表示へ戻します。巨大Bannerは追加しません。
+- Camera / Audio: Mobile camera操作と連続attackの安定性を優先してCamera shakeは追加しません。信頼できるAsset IDを新規導入しないためAudioも追加しません。
+
 Static test:
 
 ```sh
@@ -237,6 +251,8 @@ build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau
 build/luau-tools/luau tests/ShopConfig.spec.luau
 build/luau-tools/luau tests/ShopRules.spec.luau
 build/luau-tools/luau tests/ShopSessionStore.spec.luau
+build/luau-tools/luau tests/FeedbackConfig.spec.luau
+build/luau-tools/luau tests/KillCounter.spec.luau
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
@@ -320,3 +336,14 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 12. ExperienceをLeaveしてRejoinし、2000 Coins、BatのみOwnedへ戻ることを確認します。
 13. Panel scroll、Card tap、CloseがCamera / Movementへ重大に漏れず、小さいPhone LandscapeでもPanelがclipしないことを確認します。
 14. GB-004 Switcher、GB-003 Combat、GB-002 Horde、GB-001 Environmentを確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceへPublishしたPlaceをPhysical Mobile DeviceのLandscapeで行います。
+
+## Human Studio / Published Mobile Check（GB-006）
+
+1. `build/Grave-Buster-gb006.rbxlx`をStudioで開き、Mobile LandscapeでJoinします。左上Safe Areaに`KILLS 0`、上部中央に既存Wave表示があることを確認します。
+2. ZombieへBatを当て、Neon flashが表示されず、吹っ飛ぶZombieの短いTrailだけが見えることと、既存Knockback量が変わっていないことを確認します。
+3. 複数Zombieを同時に倒し、全defeat数だけKILLSが増えることを確認します。連続Hold attackでもEffectが短時間で消え、画面を覆わないことを確認します。
+4. 5 Weaponを試し、Trail色に軽微な差があること、Thunder Rodでも高コストなLightning effectがないことを確認します。
+5. Character Reset後もKILLSを維持し、ExperienceをLeaveしてRejoinすると`KILLS 0`へ戻ることを確認します。
+6. Wave切替時だけ既存表示が短く1.16倍になり、その後通常サイズへ戻ることを確認します。Gameplayを遮るBannerがないことも確認します。
+7. Shop、Currency、Ownership、Switcher、Combat、Horde、EnvironmentがGB-005以前と同じ動作を維持していることを確認します。
+8. 28 Active Zombieと複数のDefeated bodyがある状態で連続attackし、Mobile frame rateに明確な悪化がなく、OutputにRuntime Errorがないことを確認します。

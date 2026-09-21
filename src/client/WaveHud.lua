@@ -2,6 +2,9 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
+local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
 
 local WaveHud = {}
 local GUI_NAME = "GraveBusterWaveHud"
@@ -46,8 +49,41 @@ function WaveHud.Start()
 	corner.Parent = label
 
 	local waveValue = ReplicatedStorage:WaitForChild("WaveNumber") :: IntValue
+	local emphasisGeneration = 0
+	local activeTween = nil
+	local scale = Instance.new("UIScale")
+	scale.Scale = 1
+	scale.Parent = label
+	local function emphasize()
+		emphasisGeneration += 1
+		local generation = emphasisGeneration
+		if activeTween then
+			activeTween:Cancel()
+		end
+		scale.Scale = 1.16
+		label.BackgroundTransparency = 0.08
+		task.delay(FeedbackConfig.WaveEmphasisHold, function()
+			if generation ~= emphasisGeneration then
+				return
+			end
+			activeTween = TweenService:Create(
+				scale,
+				TweenInfo.new(FeedbackConfig.WaveEmphasisFade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ Scale = 1 }
+			)
+			activeTween:Play()
+			TweenService:Create(
+				label,
+				TweenInfo.new(FeedbackConfig.WaveEmphasisFade),
+				{ BackgroundTransparency = 0.35 }
+			):Play()
+		end)
+	end
 	local function update()
 		label.Text = if waveValue.Value > 0 then string.format("WAVE %d", waveValue.Value) else "GET READY"
+		if waveValue.Value > 0 then
+			emphasize()
+		end
 	end
 	waveValue:GetPropertyChangedSignal("Value"):Connect(update)
 	update()
