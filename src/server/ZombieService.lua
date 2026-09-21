@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
+local ActiveZombieRegistry = require(script.Parent.ActiveZombieRegistry)
 local ZombieRules = require(script.Parent.ZombieRules)
 
 type JointSet = {
@@ -19,7 +20,6 @@ type ZombieEntry = {
 	Humanoid: Humanoid,
 	Root: BasePart,
 	Joints: JointSet,
-	SpawnedAt: number,
 	NextTargetRefresh: number,
 	TargetPlayer: Player?,
 	ApproachOffset: Vector3,
@@ -33,9 +33,8 @@ local SPAWN_EDGE = 76
 local SPAWN_LANES = { -60, -44, -28, -12, 12, 28, 44, 60 }
 local APPROACH_SLOTS_PER_RING = 14
 
-local entries: { [Model]: ZombieEntry } = {}
+local registry = ActiveZombieRegistry.new()
 local container: Folder? = nil
-local activeCount = 0
 local spawnCursor = 0
 local running = false
 
@@ -164,14 +163,12 @@ local function updateAnimation(entry: ZombieEntry, now: number, moving: boolean)
 end
 
 local function releaseZombie(model: Model): boolean
-	local entry = entries[model]
+	local entry = registry:Release(model)
 	if not entry then
 		return false
 	end
 	entry.Humanoid:Move(Vector3.zero)
 	stopAnimation(entry)
-	entries[model] = nil
-	activeCount -= 1
 	return true
 end
 
@@ -181,8 +178,7 @@ local function removeZombie(model: Model)
 end
 
 local function updateZombie(model: Model, entry: ZombieEntry, now: number)
-	if model.Parent ~= container or entry.Humanoid.Health <= 0
-		or HordeConfig.IsExpired(entry.SpawnedAt, now) or entry.Root.Position.Y < -20 then
+	if model.Parent ~= container or entry.Humanoid.Health <= 0 or entry.Root.Position.Y < -20 then
 		removeZombie(model)
 		return
 	end
@@ -216,7 +212,7 @@ end
 local function updateLoop()
 	while running do
 		local now = os.clock()
-		for model, entry in entries do
+		for model, entry in registry:Entries() do
 			updateZombie(model, entry, now)
 		end
 		task.wait(HordeConfig.AIUpdateInterval)
@@ -237,8 +233,7 @@ function ZombieService.Start()
 	if previous then
 		previous:Destroy()
 	end
-	entries = {}
-	activeCount = 0
+	registry:Clear()
 	spawnCursor = 0
 	local newContainer = Instance.new("Folder")
 	newContainer.Name = ZOMBIE_CONTAINER_NAME
@@ -248,12 +243,13 @@ function ZombieService.Start()
 end
 
 function ZombieService.Spawn(): Model?
-	if not running or not container or not HordeConfig.CanSpawn(activeCount) then
+	if not running or not container or not HordeConfig.CanSpawn(registry:Count()) then
 		return nil
 	end
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
 	local model, humanoid, root, joints = createZombieModel(spawnCursor)
+	model:SetAttribute("ZombieState", "ACTIVE")
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
@@ -263,17 +259,15 @@ function ZombieService.Spawn(): Model?
 	local ringSlot = approachSlot % APPROACH_SLOTS_PER_RING
 	local angle = (ringSlot + approachRing * 0.5) / APPROACH_SLOTS_PER_RING * math.pi * 2
 	local approachRadius = HordeConfig.ApproachRadius + approachRing * 2.5
-	entries[model] = {
+	registry:Add(model, {
 		Humanoid = humanoid,
 		Root = root,
 		Joints = joints,
-		SpawnedAt = os.clock(),
 		NextTargetRefresh = 0,
 		TargetPlayer = nil,
 		ApproachOffset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * approachRadius,
 		AnimationPhase = spawnCursor * 0.7,
-	}
-	activeCount += 1
+	})
 	return model
 end
 
@@ -283,11 +277,24 @@ function ZombieService.HasValidTarget(): boolean
 end
 
 function ZombieService.GetActiveCount(): number
-	return activeCount
+	return registry:Count()
 end
 
--- GB-003 can call this before a physics launch to stop AI ownership without
--- destroying the rig. The combat system will then own final cleanup.
+function ZombieService.IsActive(model: Model): boolean
+	return registry:Contains(model)
+end
+
+function ZombieService.GetRoot(model: Model): BasePart?
+	local entry = registry:Get(model)
+	return if entry then entry.Root else nil
+end
+
+function ZombieService.GetContainer(): Folder?
+	return container
+end
+
+-- Combat calls this before a physics launch to stop AI ownership without
+-- destroying the rig. CombatService then owns final cleanup.
 function ZombieService.Release(model: Model): boolean
 	return releaseZombie(model)
 end
