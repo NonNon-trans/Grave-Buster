@@ -1,0 +1,58 @@
+{
+  "name": "Grave Buster",
+  "tree": {
+    "$className": "DataModel",
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$path": "src/server"
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "Bootstrap": {
+          "$path": "src/client/Bootstrap.client.lua"
+        }
+      }
+    },
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "Client": {
+        "$className": "Folder",
+        "CombatFeedbackController": {
+          "$path": "src/client/CombatFeedbackController.lua"
+        },
+        "CombatController": {
+          "$path": "src/client/CombatController.lua"
+        },
+        "HoldState": {
+          "$path": "src/client/HoldState.lua"
+        },
+        "OwnedWeaponSource": {
+          "$path": "src/client/OwnedWeaponSource.lua"
+        },
+        "ShopController": {
+          "$path": "src/client/ShopController.lua"
+        },
+        "ShopPresentation": {
+          "$path": "src/client/ShopPresentation.lua"
+        },
+        "WaveHud": {
+          "$path": "src/client/WaveHud.lua"
+        },
+        "WeaponPresenter": {
+          "$path": "src/client/WeaponPresenter.lua"
+        },
+        "WeaponSwitcher": {
+          "$path": "src/client/WeaponSwitcher.lua"
+        },
+        "WeaponSwitcherRules": {
+          "$path": "src/client/WeaponSwitcherRules.lua"
+        }
+      },
+      "Shared": {
+        "$path": "src/shared"
+      }
+    }
+  }
+}
