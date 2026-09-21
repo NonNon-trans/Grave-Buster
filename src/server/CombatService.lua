@@ -217,8 +217,6 @@ local function defeatZombie(model: Model, playerRoot: BasePart, weaponName: stri
 	if not targetRoot or not zombieService.Release(model) then
 		return nil
 	end
-	local hitPosition = targetRoot.Position
-
 	model:SetAttribute("ZombieState", "DEFEATED")
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -244,7 +242,7 @@ local function defeatZombie(model: Model, playerRoot: BasePart, weaponName: stri
 	targetRoot:ApplyImpulse((desiredVelocity - targetRoot.AssemblyLinearVelocity) * targetRoot.AssemblyMass)
 	targetRoot:ApplyAngularImpulse(Vector3.new(config.Spin, config.Spin * 0.5, -config.Spin) * targetRoot.AssemblyMass)
 	Debris:AddItem(model, config.PresentationLifetime)
-	return { Position = hitPosition, Root = targetRoot }
+	return targetRoot
 end
 
 local function performAttack(player: Player)
@@ -264,21 +262,21 @@ local function performAttack(player: Player)
 	lastAttackAt[player] = now
 
 	local targets = queryTargets(root, config)
-	local feedbackHits = {}
+	local feedbackRoots = {}
 	local effectLimit = FeedbackConfig.GetEffectCount(config.MaxTargets)
 	local defeatCount = 0
 	for index = 1, math.min(#targets, config.MaxTargets) do
-		local feedbackHit = defeatZombie(targets[index], root, weaponName, config)
-		if feedbackHit then
+		local defeatedRoot = defeatZombie(targets[index], root, weaponName, config)
+		if defeatedRoot then
 			defeatCount += 1
-			if #feedbackHits < effectLimit then
-				table.insert(feedbackHits, feedbackHit)
+			if #feedbackRoots < effectLimit then
+				table.insert(feedbackRoots, defeatedRoot)
 			end
 		end
 	end
 	if defeatCount > 0 then
 		player:SetAttribute(KILL_ATTRIBUTE, killCounter:Add(player, defeatCount))
-		feedbackRemote:FireClient(player, weaponName, feedbackHits)
+		feedbackRemote:FireClient(player, weaponName, feedbackRoots)
 	end
 end
 

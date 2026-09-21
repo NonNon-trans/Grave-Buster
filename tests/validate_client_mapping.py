@@ -109,7 +109,6 @@ def validate(place_path: str) -> None:
         'local KILL_ATTRIBUTE = "SessionKills"',
         "player:GetAttributeChangedSignal(KILL_ATTRIBUTE)",
         "FeedbackConfig.MaxEffectsPerAttack",
-        "Debris:AddItem(flash, FeedbackConfig.ImpactLifetime + 0.05)",
         "Debris:AddItem(trail, FeedbackConfig.TrailLifetime)",
         "Debris:AddItem(upper, FeedbackConfig.TrailLifetime)",
         "Debris:AddItem(lower, FeedbackConfig.TrailLifetime)",
@@ -161,7 +160,8 @@ def validate(place_path: str) -> None:
         )
 
     shared = direct_child(replicated_storage, "Shared", "Folder")
-    direct_child(shared, "FeedbackConfig", "ModuleScript")
+    feedback_config = direct_child(shared, "FeedbackConfig", "ModuleScript")
+    assert "ImpactLifetime" not in source_of(feedback_config)
     direct_child(shared, "ShopConfig", "ModuleScript")
 
     server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
@@ -188,12 +188,15 @@ def validate(place_path: str) -> None:
     for fragment in (
         'local KILL_ATTRIBUTE = "SessionKills"',
         "killCounter:Add(player, defeatCount)",
-        "feedbackRemote:FireClient(player, weaponName, feedbackHits)",
-        "if feedbackHit then",
+        "feedbackRemote:FireClient(player, weaponName, feedbackRoots)",
+        "if defeatedRoot then",
         "FeedbackConfig.GetEffectCount(config.MaxTargets)",
         "killCounter:Remove(player)",
     ):
         assert fragment in combat_service_source, f"CombatService feedback contract missing: {fragment}"
+    assert "Position = hitPosition" not in combat_service_source
+    assert "createImpact" not in feedback_source
+    assert "ZombieImpactFlash" not in feedback_source
 
     for name, module in modules.items():
         source = source_of(module)

@@ -3,8 +3,6 @@
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-local Workspace = game:GetService("Workspace")
 
 local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
 
@@ -20,29 +18,6 @@ local COLORS = {
 	BLOWER = Color3.fromRGB(174, 232, 236),
 	THUNDER_ROD = Color3.fromRGB(190, 174, 255),
 }
-
-local function createImpact(position, color)
-	local flash = Instance.new("Part")
-	flash.Name = "ZombieImpactFlash"
-	flash.Shape = Enum.PartType.Ball
-	flash.Size = Vector3.new(0.8, 0.8, 0.8)
-	flash.Position = position
-	flash.Anchored = true
-	flash.CanCollide = false
-	flash.CanTouch = false
-	flash.CanQuery = false
-	flash.CastShadow = false
-	flash.Material = Enum.Material.Neon
-	flash.Color = color
-	flash.Transparency = 0.12
-	flash.Parent = Workspace
-	TweenService:Create(
-		flash,
-		TweenInfo.new(FeedbackConfig.ImpactLifetime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-		{ Size = Vector3.new(2.6, 2.6, 2.6), Transparency = 1 }
-	):Play()
-	Debris:AddItem(flash, FeedbackConfig.ImpactLifetime + 0.05)
-end
 
 local function createKnockbackTrail(root, color)
 	if not root or not root:IsA("BasePart") or not root.Parent then
@@ -119,18 +94,14 @@ function CombatFeedbackController.Start()
 	updateKills()
 
 	local feedbackRemote = ReplicatedStorage:WaitForChild("CombatRemotes"):WaitForChild("CombatFeedback")
-	feedbackRemote.OnClientEvent:Connect(function(weaponName, hits)
-		if type(weaponName) ~= "string" or type(hits) ~= "table" then
+	feedbackRemote.OnClientEvent:Connect(function(weaponName, roots)
+		if type(weaponName) ~= "string" or type(roots) ~= "table" then
 			return
 		end
 		local color = COLORS[weaponName] or Color3.fromRGB(245, 245, 235)
-		local effectCount = math.min(#hits, FeedbackConfig.MaxEffectsPerAttack)
+		local effectCount = math.min(#roots, FeedbackConfig.MaxEffectsPerAttack)
 		for index = 1, effectCount do
-			local hit = hits[index]
-			if type(hit) == "table" and typeof(hit.Position) == "Vector3" then
-				createImpact(hit.Position, color)
-				createKnockbackTrail(hit.Root, color)
-			end
+			createKnockbackTrail(roots[index], color)
 		end
 	end)
 end

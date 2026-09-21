@@ -230,9 +230,9 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 ## Feel & Feedback仕様（GB-006）
 
-- Hit impact: Serverで実際にZombieをReleaseできたattackだけを`CombatFeedback`で攻撃Playerへ通知します。ClientはHit位置へ0.18秒の小さなNeon flashを表示し、最大2.6 studsまで拡大して消します。
-- Knockback emphasis: Defeated rootへ0.22秒だけ短いTrailをlocal生成します。Weapon別に暖色 / 金属色 / Orange / Cyan / Violetへ軽微に色分けします。既存のKnockback force、hitbox、interval、physics lifetimeは変更しません。
-- Bounded effects: 1 attackの表示は最大8 Zombie分。Part、Trail、AttachmentはDebrisで必ずcleanupし、ParticleEmitter、Heartbeat、Zombie別connectionは使用しません。
+- Hit / knockback feedback: Serverで実際にZombieをReleaseできたattackだけを`CombatFeedback`で攻撃Playerへ通知し、Defeated rootへ0.22秒だけ短いTrailをlocal生成します。Human Gate結果によりNeon hit flashは削除済みです。
+- Weapon identity: TrailをWeapon別に暖色 / 金属色 / Orange / Cyan / Violetへ軽微に色分けします。既存のKnockback force、hitbox、interval、physics lifetimeは変更しません。
+- Bounded effects: 1 attackの表示は最大8 Zombie分。TrailとAttachmentはDebrisで必ずcleanupし、Part、ParticleEmitter、Heartbeat、Zombie別connectionは使用しません。
 - Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。左上Safe Areaの116×36 px `KILLS N`表示へ反映し、Character Resetでは維持、Leave / Rejoinでは0へ戻ります。Currency / Rewardとは接続しません。
 - Wave emphasis: 既存132×32 px表示を維持し、Wave更新時だけ0.55秒間1.16倍・背景を明瞭化し、0.35秒で通常表示へ戻します。巨大Bannerは追加しません。
 - Camera / Audio: Mobile camera操作と連続attackの安定性を優先してCamera shakeは追加しません。信頼できるAsset IDを新規導入しないためAudioも追加しません。
@@ -340,9 +340,9 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 ## Human Studio / Published Mobile Check（GB-006）
 
 1. `build/Grave-Buster-gb006.rbxlx`をStudioで開き、Mobile LandscapeでJoinします。左上Safe Areaに`KILLS 0`、上部中央に既存Wave表示があることを確認します。
-2. ZombieへBatを当て、Hit位置の小さなflashと吹っ飛ぶZombieの短いTrailが見え、既存Knockback量が変わっていないことを確認します。
+2. ZombieへBatを当て、Neon flashが表示されず、吹っ飛ぶZombieの短いTrailだけが見えることと、既存Knockback量が変わっていないことを確認します。
 3. 複数Zombieを同時に倒し、全defeat数だけKILLSが増えることを確認します。連続Hold attackでもEffectが短時間で消え、画面を覆わないことを確認します。
-4. 5 Weaponを試し、Impact色に軽微な差があること、Thunder Rodでも高コストなLightning effectがないことを確認します。
+4. 5 Weaponを試し、Trail色に軽微な差があること、Thunder Rodでも高コストなLightning effectがないことを確認します。
 5. Character Reset後もKILLSを維持し、ExperienceをLeaveしてRejoinすると`KILLS 0`へ戻ることを確認します。
 6. Wave切替時だけ既存表示が短く1.16倍になり、その後通常サイズへ戻ることを確認します。Gameplayを遮るBannerがないことも確認します。
 7. Shop、Currency、Ownership、Switcher、Combat、Horde、EnvironmentがGB-005以前と同じ動作を維持していることを確認します。
