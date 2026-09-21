@@ -19,6 +19,9 @@
       "$className": "ReplicatedStorage",
       "Client": {
         "$className": "Folder",
+        "CombatFeedbackController": {
+          "$path": "src/client/CombatFeedbackController.lua"
+        },
         "CombatController": {
           "$path": "src/client/CombatController.lua"
         },
