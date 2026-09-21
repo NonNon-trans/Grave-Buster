@@ -17,6 +17,7 @@ local holdState = HoldState.new()
 local activeInput = nil
 local currentWeapon = WeaponConfig.DefaultWeapon
 local lastLocalAttack = -math.huge
+local setShopOpenImpl = nil
 
 local function makeButton(name: string, text: string, size: UDim2, position: UDim2): TextButton
 	local button = Instance.new("TextButton")
@@ -82,6 +83,11 @@ function CombatController.Start()
 		stopHold()
 		equipRemote:FireServer(requestedWeapon)
 	end)
+	setShopOpenImpl = function(isOpen)
+		stopHold()
+		attackButton.Visible = not isOpen
+		switcher:SetEnabled(not isOpen)
+	end
 
 	local function equipPresentation()
 		local selected = player:GetAttribute("EquippedWeapon")
@@ -141,6 +147,11 @@ function CombatController.Start()
 	end)
 
 	player:GetAttributeChangedSignal("EquippedWeapon"):Connect(equipPresentation)
+	OwnedWeaponSource.Changed:Connect(function()
+		ownedWeapons = OwnedWeaponSource.GetOwnedWeapons()
+		switcher:SetOwnedWeapons(ownedWeapons)
+		equipPresentation()
+	end)
 	player.CharacterRemoving:Connect(function()
 		stopHold()
 		switcher:CancelInteraction()
@@ -151,6 +162,12 @@ function CombatController.Start()
 		task.defer(equipPresentation)
 	end)
 	equipPresentation()
+end
+
+function CombatController.SetShopOpen(isOpen: boolean)
+	if setShopOpenImpl then
+		setShopOpenImpl(isOpen)
+	end
 end
 
 return CombatController

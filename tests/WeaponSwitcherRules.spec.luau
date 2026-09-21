@@ -6,6 +6,7 @@ local owned = { "BAT", "PAN", "HAMMER", "BLOWER", "ROD" }
 assert(Rules.Step(owned, "BAT", 1) == "PAN")
 assert(Rules.Step(owned, "BAT", -1) == "ROD", "Previous must wrap first to last")
 assert(Rules.Step(owned, "ROD", 1) == "BAT", "Next must wrap last to first")
+assert(Rules.Step({ "BAT" }, "BAT", 1) == "BAT", "Single-owned list must remain stable")
 assert(Rules.ResolveCurrent(owned, "PAN", "BAT") == "PAN")
 assert(Rules.ResolveCurrent(owned, "REMOVED", "BAT") == "BAT")
 assert(Rules.ResolveCurrent({ "PAN" }, "REMOVED", "BAT") == "PAN")

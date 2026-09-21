@@ -2,7 +2,7 @@
 
 現在Version: **v0.1 development**
 
-現在Phase: **GB-004 — Weapon Switcher UI**
+現在Phase: **GB-005 — Online Weapon Shop**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -11,12 +11,12 @@ Thunder Battleとは独立した新規Projectです。
 GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
 5種類のWeaponはRange・Hit shape・Knockbackで差別化し、ZombieはPlayerへ接近しますが攻撃しません。
-Combat result、Zombie lifecycle、Wave progressionはServer Authorityです。Shop、Currency、DataStoreは未実装です。
+Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownershipはServer Authorityです。CurrencyとownershipはSession-onlyで、DataStoreは未実装です。
 
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-GB-004でもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にProduction Weapon Switcher、上部中央に小さなWave表示を置きます。
+GB-005でもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、上部中央にWave表示、右上にSHOP buttonを置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
@@ -31,6 +31,9 @@ Grave-Buster/
 │   │   ├── ArenaService.lua
 │   │   ├── CombatRules.lua
 │   │   ├── CombatService.lua
+│   │   ├── ShopRules.lua
+│   │   ├── ShopService.lua
+│   │   ├── ShopSessionStore.lua
 │   │   ├── ZombieRules.lua
 │   │   ├── ZombieService.lua
 │   │   ├── WaveService.lua
@@ -39,6 +42,8 @@ Grave-Buster/
 │   │   ├── CombatController.lua
 │   │   ├── HoldState.lua
 │   │   ├── OwnedWeaponSource.lua
+│   │   ├── ShopController.lua
+│   │   ├── ShopPresentation.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
@@ -46,6 +51,7 @@ Grave-Buster/
 │   │   └── Bootstrap.client.lua
 │   └── shared/
 │       ├── HordeConfig.lua
+│       ├── ShopConfig.lua
 │       ├── WeaponConfig.lua
 │       └── ProjectInfo.lua
 ├── tests/
@@ -54,6 +60,10 @@ Grave-Buster/
 │   ├── HoldState.spec.luau
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
+│   ├── ShopConfig.spec.luau
+│   ├── ShopPresentation.spec.luau
+│   ├── ShopRules.spec.luau
+│   ├── ShopSessionStore.spec.luau
 │   ├── WeaponConfig.spec.luau
 │   ├── WeaponSwitcherRules.spec.luau
 │   ├── validate_client_mapping.py
@@ -66,13 +76,13 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、attack検証、hit query、defeat / physics cleanup |
+| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop state / purchase validation |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、local weapon presentation、Production Weapon Switcher、Wave HUD |
-| `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde設定、Weapon tuning |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop UI、Wave HUD |
+| `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
-Combat intentとWeapon selection requestだけを`ReplicatedStorage.CombatRemotes`でServerへ送ります。Clientはhit targetやdefeat結果を指定できません。
+Combat intentとWeapon selectionは`CombatRemotes`、Shop state取得とWeapon IDだけの購入要求は`ShopRemotes`を使います。Clientはhit target、defeat、price、currency、ownershipを指定できません。
 Client ModuleScriptはStarter containerのruntime cloneへ依存せず、`ReplicatedStorage.Client`の安定したhierarchyからBootstrapがrequireします。
 
 ## Toolchain
@@ -124,7 +134,7 @@ main
 
 各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
 Release時のみ`develop` → `main`へmergeします。
-GB-004の作業branchは`phase/GB-004-weapon-switcher`です。
+GB-005の作業branchは`phase/GB-005-shop`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
 
 ## Arena仕様
@@ -192,13 +202,26 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 - Layout: `ScreenInsets=DeviceSafeInsets`のScreenGui内、画面下部中央へAnchorPoint `(0.5, 1)`、相対幅42%、高さ74 pxで配置します。幅は280〜430 pxに制限し、標準Movement、Jump、右側ATTACKを避けます。
 - Controls: 左右に62×62 pxのPrevious / Next touch target、中央に短い文字IconとWeapon名を表示します。外部Image Assetは使用しません。
-- Owned source: `OwnedWeaponSource.GetOwnedWeapons()`が`WeaponConfig.Order`のcopyを返します。GB-004では5 WeaponすべてOwnedです。Switcherの`SetOwnedWeapons()`は重複・不正Weaponを除外し、将来のlist更新とcurrent weapon消失時のfallbackを受けられます。
+- Owned source: `OwnedWeaponSource`はServer snapshotのrevision、Currency、正式順のOwned listをClient presentation用に保持します。Join直後はBatのみで、購入成功イベントからSwitcherの`SetOwnedWeapons()`へ即反映します。
 - Selection authority: Arrow / Swipeは既存`EquipRequest`へselection intentを送り、表示とWeapon modelはServerが更新した`EquippedWeapon` attributeで確定します。UI animation完了を待たず即requestします。
 - Wrap: 最初からPreviousで最後、最後からNextで最初へ移動します。高速操作中はpending cursorで順序を保持し、表示は最新のServer確認へ追従します。
 - Swipe: 中央領域でのみdragを開始し、release時の水平移動48 px以上かつ水平量が垂直量の1.25倍を超えた場合だけ1段切り替えます。LeftはNext、RightはPreviousです。Gestureはfinish時に消費されるため1 Swipeから複数切替しません。
 - Visibility: Idle時は背景Transparency 0.50、文字 / Icon 0.42、Outline 0.55。Touch時はすべて0へ即時変更します。操作終了後1.0秒完全表示を保ち、0.3秒でIdleへfadeします。generation tokenとTween cancelによりfade中の再Touchを即時反映します。
 - Feedback: Server確認後、中央itemを0.90から1.00へ0.14秒でscaleして切替を示します。GameplayのEquip処理は待ちません。
 - Lifecycle: Weapon切替要求時に旧Hold-to-Attack loopを停止します。GUIはrespawnを越えて維持され、Character再生成後はSession内の確認済みWeaponを再装備します。DEV selectorとPlayer-facing development文字列は削除済みです。
+
+## Online Weapon Shop仕様（GB-005）
+
+- Economy: Join時2000 Coins。BASEBALL BATだけをDefault Owned / Equippedとし、Character Resetでは維持、Leaveで破棄、Rejoinで初期化します。DataStore、Kill Reward、Monetizationはありません。
+- Prices: Baseball Bat 0、Frying Pan 200、Giant Hammer 400、Blower 600、Thunder Rod 1000 Coins。`ShopConfig`が正式Order、Price、Default Ownedを一元管理します。
+- Server authority: `ShopService`がPlayerごとのSession state、revision、purchase lockを所有します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、残高、request shapeを検証します。同一callback内にyieldを挟まずCurrency更新とownership grantを完結します。
+- State sync: `GetState`でCurrency / Owned Weapons / Equipped Weapon / Revisionを取得し、購入成功時は`StateChanged`とPurchase responseでsnapshotを返します。Clientは新しいrevisionだけを`OwnedWeaponSource`へ適用します。
+- SHOP button: `CoreUISafeInsets`内の右上、112×46 px。Shop Panelは中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
+- Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
+- Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
+- Combat interaction: Shop open時にHold-to-Attackを停止し、ATTACKとSwitcherを隠します。Closeで即復帰しますがAttackは自動再開しません。Server Wave / Zombie simulationは停止しません。
+- Failure: 残高不足は`NOT ENOUGH COINS`、既購入はServerでrejectします。Client pending guardとServer purchase lockによりrapid double-purchaseを防止します。
+- Source boundary: ShopとSwitcherは同じ`OwnedWeaponSource`をpresentation sourceとして購読し、authoritative sourceはServer sessionだけです。購入順に関係なくSwitcherは正式Weapon orderを維持します。
 
 Static test:
 
@@ -211,6 +234,9 @@ build/luau-tools/luau tests/CombatRules.spec.luau
 build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
 build/luau-tools/luau tests/HoldState.spec.luau
 build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau
+build/luau-tools/luau tests/ShopConfig.spec.luau
+build/luau-tools/luau tests/ShopRules.spec.luau
+build/luau-tools/luau tests/ShopSessionStore.spec.luau
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
@@ -254,7 +280,7 @@ API参照: [Humanoid](https://create.roblox.com/docs/reference/engine/classes/Hu
 
 1. buildしたPlaceをStudioで開き、Device EmulatorをMobile LandscapeにしてPlayします。LobbyなしでSpawnし、3秒後からWaveが始まることを確認します。
 2. 右側の`ATTACK`をtapし、即座にweapon swingが見えることを確認します。移動しながら押せること、長押し中は連続attackし、指を離すと即停止することを確認します。
-3. 下部中央のProduction Weapon SwitcherでBASEBALL BAT / FRYING PAN / GIANT HAMMER / BLOWER / THUNDER RODの5種が順番に表示・装備されることを確認します。切替中にhold loopや旧modelが残らないことも確認します。
+3. 下部中央のProduction Weapon SwitcherでOwned Weaponだけが正式順に表示・装備されることを確認します。切替中にhold loopや旧modelが残らないことも確認します。
 4. Batは前方、Panは左右へ散らす、Hammerは高く重く複数、Blowerは広い前方、Thunder Rodは近傍へ連鎖することを確認します。各Weaponで複数体を一撃defeatでき、hit直後に消えず1.8〜2.4秒飛んでから消えることを確認します。
 5. Defeated ZombieがPlayerを押さず、ACTIVE ZombieのAIへ戻らず、同じtargetが二重defeatされないことを確認します。Player用墓石boundaryを越えるlaunchが可能であることも観察します。
 6. 何もattackせず30秒以上待ち、ACTIVE Zombieが時間だけでは消えずcapまで圧力が蓄積することを確認します。大量にdefeatすると空間が開き、空いたslotへ後続WaveからZombieが供給されることを確認します。
@@ -277,3 +303,20 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 8. Character Reset後も直前Weapon、Switcher表示、Weapon modelが一致し、GUIが重複しないことを確認します。
 9. Movement、Camera、Jump、ATTACKと重大なTouch干渉がなく、小さいPhone Landscapeでも文字やArrowがclipしないことを確認します。
 10. GB-003 Combat Feel、Zombie Horde、Wave、Environmentを再確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceへPublishしたPlaceをPhysical Mobile DeviceのLandscapeで行います。
+
+## Human Studio / Published Mobile Check（GB-005）
+
+1. `build/Grave-Buster-gb005.rbxlx`をStudioで開き、Mobile LandscapeでJoinします。SwitcherがBASEBALL BATだけを表示し、CharacterもBatを装備することを確認します。
+2. 右上のSHOPを押し、中央Panel、固定Currency表示`COINS: 2000`、Close、5 Weapon Cardを確認します。
+3. Batが`EQUIPPED`、他4 Weaponが購入前Price付きで表示されることを確認します。
+4. Panを購入し、Coinsが1800、Cardが`OWNED`、SwitcherへPanが即追加されることを確認します。現在WeaponはBatのままであることも確認します。
+5. OWNED CardをTapし、既存Equip pipelineでShop、Switcher、Characterが同じWeaponになることを確認します。
+6. Pan / Hammer / Blowerを購入後、残高800でThunder Rodを購入し、`NOT ENOUGH COINS`、残高不変、UNOWNED維持を確認します。
+7. 同じCardを高速連打し、成功とCurrency減算が1回だけであることを確認します。
+8. Shopを閉じ、購入済みWeaponだけをSwitcherで自由に切り替え、直後にATTACKできることを確認します。
+9. ATTACK Hold中にShopを開き、Holdが停止すること、Shop中はATTACKとSwitcherが隠れ、Close後もAttackが自動再開しないことを確認します。WaveとZombieは継続します。
+10. Close / ReopenでCurrency、Owned、Equipped stateがServer snapshotと一致することを確認します。
+11. Character Reset後もCurrency、Owned list、Equipped Weapon、Shop stateが維持され、UIが重複しないことを確認します。
+12. ExperienceをLeaveしてRejoinし、2000 Coins、BatのみOwnedへ戻ることを確認します。
+13. Panel scroll、Card tap、CloseがCamera / Movementへ重大に漏れず、小さいPhone LandscapeでもPanelがclipしないことを確認します。
+14. GB-004 Switcher、GB-003 Combat、GB-002 Horde、GB-001 Environmentを確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceへPublishしたPlaceをPhysical Mobile DeviceのLandscapeで行います。

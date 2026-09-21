@@ -17,6 +17,7 @@ local DEFEATED_GROUP = "DefeatedZombie"
 
 local started = false
 local zombieService = nil
+local shopService = nil
 local lastAttackAt = {}
 
 local function ensureRemote(folder: Folder, name: string): RemoteEvent
@@ -239,7 +240,7 @@ end
 local function performAttack(player: Player)
 	local weaponName = player:GetAttribute("EquippedWeapon")
 	local config = WeaponConfig.Get(weaponName)
-	if not config then
+	if not config or not shopService.IsOwned(player, weaponName) then
 		return
 	end
 	local _, root = getCharacterRoot(player)
@@ -258,12 +259,13 @@ local function performAttack(player: Player)
 	end
 end
 
-function CombatService.Start(service)
+function CombatService.Start(service, ownershipService)
 	if started then
 		return
 	end
 	started = true
 	zombieService = service
+	shopService = ownershipService
 	WeaponConfig.Validate()
 
 	if not PhysicsService:IsCollisionGroupRegistered(DEFEATED_GROUP) then
@@ -274,7 +276,8 @@ function CombatService.Start(service)
 
 	local attackRemote, equipRemote = ensureRemotes()
 	local function initializePlayer(player: Player)
-		if not WeaponConfig.IsValid(player:GetAttribute("EquippedWeapon")) then
+		local equipped = player:GetAttribute("EquippedWeapon")
+		if not WeaponConfig.IsValid(equipped) or not shopService.IsOwned(player, equipped) then
 			player:SetAttribute("EquippedWeapon", WeaponConfig.DefaultWeapon)
 		end
 	end
@@ -293,7 +296,8 @@ function CombatService.Start(service)
 	equipRemote.OnServerEvent:Connect(function(player, requestedWeapon, ...)
 		if select("#", ...) == 0
 			and type(requestedWeapon) == "string"
-			and WeaponConfig.IsValid(requestedWeapon) then
+			and WeaponConfig.IsValid(requestedWeapon)
+			and shopService.IsOwned(player, requestedWeapon) then
 			player:SetAttribute("EquippedWeapon", requestedWeapon)
 		end
 	end)

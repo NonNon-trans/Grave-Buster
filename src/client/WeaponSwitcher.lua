@@ -196,7 +196,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		activate()
 		local cursor = pendingWeapon or selectedWeapon
 		local requested = Rules.Step(currentOwned, cursor, direction)
-		if requested then
+		if requested and requested ~= cursor then
 			pendingWeapon = requested
 			onSelectionRequested(requested)
 		end
@@ -272,6 +272,9 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			end
 		end
 		currentOwned = filtered
+		if pendingWeapon and not table.find(currentOwned, pendingWeapon) then
+			pendingWeapon = nil
+		end
 		local resolved = Rules.ResolveCurrent(currentOwned, selectedWeapon, WeaponConfig.DefaultWeapon)
 		if resolved and resolved ~= selectedWeapon then
 			pendingWeapon = resolved
@@ -295,6 +298,13 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		dragState:Cancel()
 		activeDragInput = nil
 		scheduleIdle()
+	end
+
+	function api:SetEnabled(enabled)
+		root.Visible = enabled
+		if not enabled then
+			self:CancelInteraction()
+		end
 	end
 
 	function api:Destroy()
