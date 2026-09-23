@@ -6,7 +6,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
+local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)
 local ActiveZombieRegistry = require(script.Parent.ActiveZombieRegistry)
+local DamageRules = require(script.Parent.DamageRules)
 local ZombieRules = require(script.Parent.ZombieRules)
 
 type JointSet = {
@@ -24,6 +26,9 @@ type ZombieEntry = {
 	TargetPlayer: Player?,
 	ApproachOffset: Vector3,
 	AnimationPhase: number,
+	MaxHP: number,
+	CurrentHP: number,
+	Lifecycle: string,
 }
 
 local ZombieService = {}
@@ -242,14 +247,22 @@ function ZombieService.Start()
 	task.spawn(updateLoop)
 end
 
-function ZombieService.Spawn(): Model?
+function ZombieService.Spawn(requestedMaxHP: number?): Model?
 	if not running or not container or not HordeConfig.CanSpawn(registry:Count()) then
+		return nil
+	end
+	local maxHP = requestedMaxHP or DamageConfig.DefaultZombieHP
+	if type(maxHP) ~= "number" or maxHP % 1 ~= 0 or maxHP < 1 or maxHP > 1000 then
 		return nil
 	end
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
 	local model, humanoid, root, joints = createZombieModel(spawnCursor)
 	model:SetAttribute("ZombieState", "ACTIVE")
+	model:SetAttribute("MaxHP", maxHP)
+	model:SetAttribute("CurrentHP", maxHP)
+	humanoid.MaxHealth = maxHP
+	humanoid.Health = maxHP
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
@@ -267,6 +280,9 @@ function ZombieService.Spawn(): Model?
 		TargetPlayer = nil,
 		ApproachOffset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * approachRadius,
 		AnimationPhase = spawnCursor * 0.7,
+		MaxHP = maxHP,
+		CurrentHP = maxHP,
+		Lifecycle = "ACTIVE",
 	})
 	return model
 end
@@ -281,7 +297,29 @@ function ZombieService.GetActiveCount(): number
 end
 
 function ZombieService.IsActive(model: Model): boolean
-	return registry:Contains(model)
+	local entry = registry:Get(model)
+	return entry ~= nil and entry.Lifecycle == "ACTIVE"
+end
+
+-- Damage and lethal lifecycle transition are synchronous and server-owned.
+function ZombieService.ApplyDamage(model: Model, damage: number)
+	local entry = registry:Get(model)
+	if not entry then
+		return nil
+	end
+	local result = DamageRules.Apply(entry, damage)
+	if not result then
+		return nil
+	end
+	model:SetAttribute("CurrentHP", result.CurrentHP)
+	local humanoid = entry.Humanoid
+	if humanoid.Parent and humanoid.Health > 0 then
+		humanoid.Health = result.CurrentHP
+	end
+	if result.Lethal then
+		model:SetAttribute("ZombieState", "DEFEATED")
+	end
+	return result
 end
 
 function ZombieService.GetRoot(model: Model): BasePart?
