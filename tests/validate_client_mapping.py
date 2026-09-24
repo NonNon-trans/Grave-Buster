@@ -220,13 +220,23 @@ def validate(place_path: str) -> None:
         "zombieService.ApplyDamage(model, config.BaseDamage)",
         "damageRemote:FireAllClients(damageResults)",
         "if result.Lethal then",
-        '"[GB021 HP TEST] HIT id=%s weapon=%s baseDamage=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s"',
+        '"[GB021 HP TEST] HIT id=%s weapon=%s attackDamage=%d actualHPLoss=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s"',
+        "AttackDamage = result.AttackDamage",
+        "CurrentHP = result.AfterHP",
         '"[GB021 HP TEST] RELEASED id=%s sessionKills=%d"',
     ):
         assert fragment in combat_service_source, f"CombatService damage contract missing: {fragment}"
 
     damage_rules_source = source_of(server_modules["DamageRules"])
-    for fragment in ('state.Lifecycle ~= "ACTIVE"', 'state.Lifecycle = "DEFEATED"'):
+    for fragment in (
+        'state.Lifecycle ~= "ACTIVE"',
+        'state.Lifecycle = "DEFEATED"',
+        "AttackDamage = appliedDamage",
+        "ActualHPLoss = actualHPLoss",
+        "BeforeHP = beforeHP",
+        "AfterHP = afterHP",
+        "local actualHPLoss = beforeHP - afterHP",
+    ):
         assert fragment in damage_rules_source, f"DamageRules lethal guard missing: {fragment}"
     zombie_service_source = source_of(server_modules["ZombieService"])
     for fragment in (
@@ -269,7 +279,9 @@ def validate(place_path: str) -> None:
         'gui.Name = "ZombieHealthBar"',
         "DamageConfig.ZombieHealthBarLifetime",
         "result.Lethal == true",
-        '"[GB021 HP TEST] CLIENT id=%s damage=%d hp=%d/%d lethal=%s"',
+        '"[GB021 HP TEST] CLIENT id=%s attackDamage=%d hp=%d/%d lethal=%s"',
+        'type(result.AttackDamage) == "number"',
+        "createDamageNumber(root, result.AttackDamage,",
         '"[GB021 HP TEST] HP BAR SHOWN id=%s hp=%d/%d"',
     ):
         assert fragment in damage_feedback_source, f"Damage presentation missing: {fragment}"

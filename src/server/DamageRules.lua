@@ -9,8 +9,10 @@ export type HealthState = {
 }
 
 export type Result = {
-	Damage: number,
-	CurrentHP: number,
+	AttackDamage: number,
+	ActualHPLoss: number,
+	BeforeHP: number,
+	AfterHP: number,
 	MaxHP: number,
 	Lethal: boolean,
 }
@@ -30,15 +32,20 @@ function DamageRules.Apply(state: HealthState, damage: number): Result?
 	if appliedDamage <= 0 then
 		return nil
 	end
-	state.CurrentHP = math.max(state.CurrentHP - appliedDamage, 0)
-	local lethal = state.CurrentHP <= 0
+	local beforeHP = state.CurrentHP
+	local afterHP = math.max(0, beforeHP - appliedDamage)
+	local actualHPLoss = beforeHP - afterHP
+	state.CurrentHP = afterHP
+	local lethal = afterHP <= 0
 	if lethal then
 		state.CurrentHP = 0
 		state.Lifecycle = "DEFEATED"
 	end
 	return {
-		Damage = appliedDamage,
-		CurrentHP = state.CurrentHP,
+		AttackDamage = appliedDamage,
+		ActualHPLoss = actualHPLoss,
+		BeforeHP = beforeHP,
+		AfterHP = afterHP,
 		MaxHP = state.MaxHP,
 		Lethal = lethal,
 	}

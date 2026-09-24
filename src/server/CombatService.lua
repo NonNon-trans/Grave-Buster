@@ -284,12 +284,13 @@ local function performAttack(player: Player)
 				local humanoidHealth = if humanoid then humanoid.Health else -1
 				local humanoidMaxHealth = if humanoid then humanoid.MaxHealth else -1
 				print(string.format(
-					"[GB021 HP TEST] HIT id=%s weapon=%s baseDamage=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s",
+					"[GB021 HP TEST] HIT id=%s weapon=%s attackDamage=%d actualHPLoss=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s",
 					model.Name,
 					weaponName,
-					config.BaseDamage,
-					result.CurrentHP + result.Damage,
-					result.CurrentHP,
+					result.AttackDamage,
+					result.ActualHPLoss,
+					result.BeforeHP,
+					result.AfterHP,
 					result.MaxHP,
 					tostring(result.Lethal),
 					humanoidHealth,
@@ -299,8 +300,8 @@ local function performAttack(player: Player)
 			end
 			table.insert(damageResults, {
 				Model = model,
-				Damage = result.Damage,
-				CurrentHP = result.CurrentHP,
+				AttackDamage = result.AttackDamage,
+				CurrentHP = result.AfterHP,
 				MaxHP = result.MaxHP,
 				Lethal = result.Lethal,
 			})

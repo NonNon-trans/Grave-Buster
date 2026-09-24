@@ -142,7 +142,7 @@ local function presentDamageResults(results)
 		if type(result) == "table"
 			and typeof(result.Model) == "Instance"
 			and result.Model:IsA("Model")
-			and type(result.Damage) == "number"
+			and type(result.AttackDamage) == "number"
 			and type(result.CurrentHP) == "number"
 			and type(result.MaxHP) == "number"
 			and result.MaxHP > 0 then
@@ -151,15 +151,15 @@ local function presentDamageResults(results)
 			if root and root:IsA("BasePart") and root:IsDescendantOf(workspace) then
 				if model:GetAttribute("GB021HPTest") == true then
 					print(string.format(
-						"[GB021 HP TEST] CLIENT id=%s damage=%d hp=%d/%d lethal=%s",
+						"[GB021 HP TEST] CLIENT id=%s attackDamage=%d hp=%d/%d lethal=%s",
 						model.Name,
-						result.Damage,
+						result.AttackDamage,
 						result.CurrentHP,
 						result.MaxHP,
 						tostring(result.Lethal == true)
 					))
 				end
-				createDamageNumber(root, result.Damage, Color3.fromRGB(255, 239, 179))
+				createDamageNumber(root, result.AttackDamage, Color3.fromRGB(255, 239, 179))
 				if result.Lethal == true or result.CurrentHP <= 0 then
 					removeHealthBar(model)
 				else

@@ -395,10 +395,10 @@ function ZombieService.ApplyDamage(model: Model, damage: number)
 	if not result then
 		return nil
 	end
-	model:SetAttribute("CurrentHP", result.CurrentHP)
+	model:SetAttribute("CurrentHP", result.AfterHP)
 	local humanoid = entry.Humanoid
 	if humanoid.Parent and humanoid.Health > 0 then
-		humanoid.Health = result.CurrentHP
+		humanoid.Health = result.AfterHP
 	end
 	if result.Lethal then
 		model:SetAttribute("ZombieState", "DEFEATED")

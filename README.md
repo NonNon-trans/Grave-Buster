@@ -252,8 +252,8 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 - Weapon BaseDamageは`WeaponConfig`をsingle sourceとして保持します。Bat 10、Pan 15、Hammer 25、Blower 18、Thunder Rod 30。既存のinterval、hit shape、range、max targets、knockback、special behaviorとShop価格は維持します。
 - `ZombieService`は通常Wave spawnでHP 10のZombieを生成し、Server registry entryとModel attributeにMaxHP / CurrentHPを保持します。Human GateのHP15個体はServer Command Barから`game.ServerScriptService.GB021HPTestSpawn:Invoke(15)`で生成します。このBindableFunctionはBootstrapが初期化したZombieService closureを呼ぶため、Command Bar側で別module evaluationが発生してもready stateを共有できます。`[GB021 INIT]` / `[GB021 TEST HARNESS]`ログはmodule path・instance・evaluation ID・ready stateを比較する診断用です。Spawn / Hit / lethal / Session Kills / Client feedbackの個体ログは`[GB021 HP TEST]`に出ます。
-- `DamageRules`はACTIVE個体だけにDamageを適用し、lethal transition時にLifecycleを同期的にDEFEATEDへ変更します。CombatServiceはlethal個体だけを既存ZombieService.Release → knockback → cleanupへ送り、Session KillsもRelease成功時だけ増やします。
-- `ZombieDamageFeedback`はServer結果のDamage / CurrentHP / MaxHP / lethal stateをClientへ送ります。Clientは短命Damage Numberを表示し、non-lethal hitのZombieだけにHP barを最大1.5秒表示します。再被弾で表示期限を更新し、lethal hitでは即時削除します。
+- `DamageRules`はACTIVE個体だけにDamageを適用し、`AttackDamage`（Server解決値）、`ActualHPLoss`、`BeforeHP`、`AfterHP`を分けて返します。AfterHPは0未満にならず、lethal transition時にLifecycleを同期的にDEFEATEDへ変更します。CombatServiceはlethal個体だけを既存ZombieService.Release → knockback → cleanupへ送り、Session KillsもRelease成功時だけ増やします。
+- `ZombieDamageFeedback`はServer結果の`AttackDamage` / CurrentHP / MaxHP / lethal stateをClientへ送ります。Damage NumberはHP残量にclampせずAttackDamageを表示し、non-lethal hitのZombieだけにHP barを最大1.5秒表示します。再被弾で表示期限を更新し、lethal hitでは即時削除します。
 - `PlayerHealthService`はCharacter spawn / respawn時にHumanoid MaxHealthとHealthを100へ設定し、Playerの`MaxHP` attributeも100にします。Zombie attack、Player Damage、Level / XP / Coins reward、Wave scaling、Death run reset、persistenceはGB-021に含めません。
 - `DamageRules.spec.luau`はHP10 + Bat、HP15 + Batのnon-lethalと次撃lethal、HP15 + Pan、二重lethal拒否、複数個体の独立HP、Player MaxHP契約を検証します。Static validationはStudio / Published Human Gateの代替ではありません。
 
