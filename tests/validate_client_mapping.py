@@ -169,6 +169,13 @@ def validate(place_path: str) -> None:
     direct_child(shared, "ShopConfig", "ModuleScript")
 
     server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
+    all_zombie_services = [
+        item for item in root.iter("Item")
+        if instance_name(item) == "ZombieService" and item.get("class") == "ModuleScript"
+    ]
+    assert len(all_zombie_services) == 1 and all_zombie_services[0] in server_scripts.findall("Item"), (
+        "generated place must contain exactly one authoritative ServerScriptService.ZombieService"
+    )
     server_modules = {}
     for name in (
         "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
@@ -183,6 +190,9 @@ def validate(place_path: str) -> None:
         "PlayerHealthService.Start()",
         "ShopService.Start()",
         "CombatService.Start(ZombieService, ShopService)",
+        "ZombieService.GetRuntimeDiagnostics()",
+        '"[GB021 INIT] path=%s moduleInstance=%s evaluation=%s serviceTable=%s readyBefore=%s"',
+        '"[GB021 INIT] path=%s moduleInstance=%s evaluation=%s serviceTable=%s readyAfter=%s container=%s"',
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
@@ -229,6 +239,12 @@ def validate(place_path: str) -> None:
         'marker.Name = "GB021HPTestMarker"',
         '"[GB021 HP TEST] SPAWN id=%s maxHP=%d currentHP=%d lifecycle=ACTIVE humanoid=%d/%d"',
         "function ZombieService.ApplyDamage(model: Model, damage: number)",
+        'harness.Name = "GB021HPTestSpawn"',
+        "harness.OnInvoke = function(requestedMaxHP: number?)",
+        "return ZombieService.Spawn(requestedMaxHP)",
+        "function ZombieService.GetRuntimeDiagnostics()",
+        "ModuleEvaluationId = moduleEvaluationId",
+        '"[GB021 TEST HARNESS] path=%s moduleInstance=%s evaluation=%s serviceTable=%s ready=%s"',
     ):
         assert fragment in zombie_service_source, f"Zombie HP implementation missing: {fragment}"
     spawn_rules_source = source_of(server_modules["ZombieRules"])

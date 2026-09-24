@@ -3,6 +3,7 @@
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
@@ -32,6 +33,7 @@ type ZombieEntry = {
 }
 
 local ZombieService = {}
+local moduleEvaluationId = game:GetService("HttpService"):GenerateGUID(false)
 local ZOMBIE_CONTAINER_NAME = "Zombies"
 local COLLISION_GROUP = "Zombie"
 local SPAWN_EDGE = 76
@@ -42,6 +44,42 @@ local registry = ActiveZombieRegistry.new()
 local container: Folder? = nil
 local spawnCursor = 0
 local running = false
+
+local function getReadinessDiagnostics()
+	return {
+		ModulePath = script:GetFullName(),
+		ModuleInstance = tostring(script),
+		ModuleEvaluationId = moduleEvaluationId,
+		ServiceTable = tostring(ZombieService),
+		Ready = running and container ~= nil,
+		ContainerPath = if container then container:GetFullName() else nil,
+	}
+end
+
+local function ensureHPTestHarness()
+	local existing = ServerScriptService:FindFirstChild("GB021HPTestSpawn")
+	if existing and not existing:IsA("BindableFunction") then
+		existing:Destroy()
+		existing = nil
+	end
+
+	local harness = existing :: BindableFunction?
+	if not harness then
+		harness = Instance.new("BindableFunction")
+		harness.Name = "GB021HPTestSpawn"
+		harness.Parent = ServerScriptService
+	end
+
+	harness.OnInvoke = function(requestedMaxHP: number?)
+		local state = getReadinessDiagnostics()
+		print(string.format(
+			"[GB021 TEST HARNESS] path=%s moduleInstance=%s evaluation=%s serviceTable=%s ready=%s",
+			state.ModulePath, state.ModuleInstance, state.ModuleEvaluationId,
+			state.ServiceTable, tostring(state.Ready)
+		))
+		return ZombieService.Spawn(requestedMaxHP)
+	end
+end
 
 local function createPart(
 	model: Model,
@@ -225,6 +263,7 @@ local function updateLoop()
 end
 
 function ZombieService.Start()
+	ensureHPTestHarness()
 	if running then
 		return
 	end
@@ -245,6 +284,10 @@ function ZombieService.Start()
 	newContainer.Parent = Workspace
 	container = newContainer
 	task.spawn(updateLoop)
+end
+
+function ZombieService.GetRuntimeDiagnostics()
+	return getReadinessDiagnostics()
 end
 
 function ZombieService.Spawn(requestedMaxHP: number?): Model?
