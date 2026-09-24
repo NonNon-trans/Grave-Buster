@@ -3,13 +3,16 @@
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
+local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)
 
 local CombatFeedbackController = {}
 local GUI_NAME = "GraveBusterFeedbackGui"
 local KILL_ATTRIBUTE = "SessionKills"
 local started = false
+local healthBars = {}
 
 local COLORS = {
 	BASEBALL_BAT = Color3.fromRGB(255, 224, 154),
@@ -45,6 +48,116 @@ local function createKnockbackTrail(root, color)
 	Debris:AddItem(trail, FeedbackConfig.TrailLifetime)
 	Debris:AddItem(upper, FeedbackConfig.TrailLifetime)
 	Debris:AddItem(lower, FeedbackConfig.TrailLifetime)
+end
+
+local function createDamageNumber(root: BasePart, damage: number, color: Color3)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "ZombieDamageNumber"
+	billboard.Adornee = root
+	billboard.Size = UDim2.fromOffset(74, 34)
+	billboard.StudsOffsetWorldSpace = Vector3.new(math.random(-8, 8) / 10, 2.5, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 120
+	billboard.Parent = root
+	local label = Instance.new("TextLabel")
+	label.Name = "Damage"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBlack
+	label.Text = tostring(damage)
+	label.TextColor3 = color
+	label.TextScaled = true
+	label.TextStrokeColor3 = Color3.fromRGB(20, 20, 20)
+	label.TextStrokeTransparency = 0.25
+	label.Parent = billboard
+	TweenService:Create(billboard, TweenInfo.new(DamageConfig.DamageNumberLifetime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		StudsOffsetWorldSpace = billboard.StudsOffsetWorldSpace + Vector3.new(0, 1.5, 0),
+	}):Play()
+	TweenService:Create(label, TweenInfo.new(DamageConfig.DamageNumberLifetime, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		TextTransparency = 1,
+		TextStrokeTransparency = 1,
+	}):Play()
+	Debris:AddItem(billboard, DamageConfig.DamageNumberLifetime)
+end
+
+local function removeHealthBar(model: Model)
+	local state = healthBars[model]
+	if state then
+		state.Gui:Destroy()
+		healthBars[model] = nil
+	end
+end
+
+local function showHealthBar(model: Model, root: BasePart, currentHP: number, maxHP: number)
+	local state = healthBars[model]
+	if not state or not state.Gui.Parent then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "ZombieHealthBar"
+		gui.Adornee = root
+		gui.Size = UDim2.fromOffset(76, 10)
+		gui.StudsOffsetWorldSpace = Vector3.new(0, 3.25, 0)
+		gui.AlwaysOnTop = true
+		gui.MaxDistance = 100
+		gui.Parent = root
+		local background = Instance.new("Frame")
+		background.Name = "Background"
+		background.Size = UDim2.fromScale(1, 1)
+		background.BackgroundColor3 = Color3.fromRGB(28, 30, 29)
+		background.BorderSizePixel = 0
+		background.ClipsDescendants = true
+		background.Parent = gui
+		local backgroundCorner = Instance.new("UICorner")
+		backgroundCorner.CornerRadius = UDim.new(0.5, 0)
+		backgroundCorner.Parent = background
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BackgroundColor3 = Color3.fromRGB(111, 196, 105)
+		fill.BorderSizePixel = 0
+		fill.Parent = background
+		local fillCorner = Instance.new("UICorner")
+		fillCorner.CornerRadius = UDim.new(0.5, 0)
+		fillCorner.Parent = fill
+		state = { Gui = gui, Fill = fill, Generation = 0 }
+		healthBars[model] = state
+	end
+	state.Generation += 1
+	state.Fill.Size = UDim2.fromScale(math.clamp(currentHP / maxHP, 0, 1), 1)
+	local generation = state.Generation
+	task.delay(DamageConfig.ZombieHealthBarLifetime, function()
+		local latest = healthBars[model]
+		if latest == state and latest.Generation == generation then
+			removeHealthBar(model)
+		end
+	end)
+end
+
+local function presentDamageResults(results)
+	if type(results) ~= "table" then
+		return
+	end
+	local count = math.min(#results, 12)
+	for index = 1, count do
+		local result = results[index]
+		if type(result) == "table"
+			and typeof(result.Model) == "Instance"
+			and result.Model:IsA("Model")
+			and type(result.AttackDamage) == "number"
+			and type(result.CurrentHP) == "number"
+			and type(result.MaxHP) == "number"
+			and result.MaxHP > 0 then
+			local model = result.Model
+			local root = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") and root:IsDescendantOf(workspace) then
+				createDamageNumber(root, result.AttackDamage, Color3.fromRGB(255, 239, 179))
+				if result.Lethal == true or result.CurrentHP <= 0 then
+					removeHealthBar(model)
+				else
+					showHealthBar(model, root, result.CurrentHP, result.MaxHP)
+				end
+			end
+		end
+	end
 end
 
 function CombatFeedbackController.Start()
@@ -104,6 +217,8 @@ function CombatFeedbackController.Start()
 			createKnockbackTrail(roots[index], color)
 		end
 	end)
+	local damageRemote = ReplicatedStorage:WaitForChild("CombatRemotes"):WaitForChild("ZombieDamageFeedback")
+	damageRemote.OnClientEvent:Connect(presentDamageResults)
 end
 
 return CombatFeedbackController

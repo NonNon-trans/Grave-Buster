@@ -1,8 +1,8 @@
 # Grave Buster
 
-現在Version: **v0.1 development**
+現在Version: **v0.2 development**
 
-現在Phase: **GB-007 — Integration & QA / Release Candidate**
+現在Phase: **GB-021 — Damage / HP Foundation**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -31,7 +31,9 @@ Grave-Buster/
 │   │   ├── ArenaService.lua
 │   │   ├── CombatRules.lua
 │   │   ├── CombatService.lua
+│   │   ├── DamageRules.lua
 │   │   ├── KillCounter.lua
+│   │   ├── PlayerHealthService.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
 │   │   ├── ShopSessionStore.lua
@@ -52,6 +54,7 @@ Grave-Buster/
 │   │   ├── WaveHud.lua
 │   │   └── Bootstrap.client.lua
 │   └── shared/
+│       ├── DamageConfig.lua
 │       ├── HordeConfig.lua
 │       ├── FeedbackConfig.lua
 │       ├── ShopConfig.lua
@@ -60,6 +63,7 @@ Grave-Buster/
 ├── tests/
 │   ├── ActiveZombieRegistry.spec.luau
 │   ├── CombatRules.spec.luau
+│   ├── DamageRules.spec.luau
 │   ├── FeedbackConfig.spec.luau
 │   ├── HoldState.spec.luau
 │   ├── HordeConfig.spec.luau
@@ -244,6 +248,16 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - RC artifact: `build/Grave-Buster-v0.1-RC.rbxlx`。`build/`はGit ignore対象で、Published TEST ExperienceへPublishする入力です。
 - Release gate: Release Blocker 0件かつStatic gate PASS後、Physical Mobile DeviceのLandscapeでJoinからLeave / RejoinまでのE2Eを実施します。Published Mobile E2E PASS後にv0.1をRelease Readyとします。
 
+## Damage / HP Foundation（GB-021）
+
+- Weapon BaseDamageは`WeaponConfig`をsingle sourceとして保持します。Bat 10、Pan 15、Hammer 25、Blower 18、Thunder Rod 30。既存のinterval、hit shape、range、max targets、knockback、special behaviorとShop価格は維持します。
+- `ZombieService`は通常Wave spawnでHP 10のZombieを生成し、Server registry entryとModel attributeにMaxHP / CurrentHPを保持します。MaxHP / CurrentHPはServerが所有し、ACTIVE中のDamage適用とlethal transitionを管理します。
+- `DamageRules`はACTIVE個体だけにDamageを適用し、`AttackDamage`（Server解決値）、`ActualHPLoss`、`BeforeHP`、`AfterHP`を分けて返します。AfterHPは0未満にならず、lethal transition時にLifecycleを同期的にDEFEATEDへ変更します。CombatServiceはlethal個体だけを既存ZombieService.Release → knockback → cleanupへ送り、Session KillsもRelease成功時だけ増やします。
+- Damage NumberはHP残量でclampせず、Serverが解決した`AttackDamage`を表示します。`ActualHPLoss`と`AfterHP`は独立して扱い、OverkillでもAfterHPは0です。
+- `ZombieDamageFeedback`はServer結果の`AttackDamage` / CurrentHP / MaxHP / lethal stateをClientへ送ります。ClientはAttackDamageをDamage Numberに表示し、non-lethal hitのZombieだけにHP barを最大1.5秒表示します。再被弾で表示期限を更新し、lethal hitでは即時削除します。
+- `PlayerHealthService`はCharacter spawn / respawn時にHumanoid MaxHealthとHealthを100へ設定し、Playerの`MaxHP` attributeも100にします。Zombie attack、Player Damage、Level / XP / Coins reward、Wave scaling、Death run reset、persistenceはGB-021に含めません。
+- `DamageRules.spec.luau`はHP10 + Bat、HP15 + Batのnon-lethalと次撃lethal、HP15 + Pan、二重lethal拒否、複数個体の独立HP、Player MaxHP契約を検証します。Static validationはStudio / Published Human Gateの代替ではありません。
+
 Static test:
 
 ```sh
@@ -252,6 +266,7 @@ build/luau-tools/luau tests/HordeSimulation.spec.luau
 build/luau-tools/luau tests/ZombieRules.spec.luau
 build/luau-tools/luau tests/WeaponConfig.spec.luau
 build/luau-tools/luau tests/CombatRules.spec.luau
+build/luau-tools/luau tests/DamageRules.spec.luau
 build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
 build/luau-tools/luau tests/HoldState.spec.luau
 build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau

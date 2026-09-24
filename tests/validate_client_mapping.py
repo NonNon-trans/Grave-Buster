@@ -41,6 +41,21 @@ def source_of(item: ET.Element) -> str:
 
 def validate(place_path: str) -> None:
     root = ET.parse(place_path).getroot()
+    generated_sources = "\n".join(source_of(item) for item in root.iter("Item"))
+    investigation_residue = (
+        "[GB021 INIT]",
+        "[GB021 HP TEST]",
+        "[GB021 TEST HARNESS]",
+        "GB021HPTestSpawn",
+        "GB021HPTestMarker",
+        "TEST HP ",
+        "GetRuntimeDiagnostics",
+        "ModuleEvaluationId",
+        "ResolveSpawnHP",
+    )
+    for residue in investigation_residue:
+        assert residue not in generated_sources, f"investigation-only source remains: {residue}"
+
     replicated_storage = direct_child(root, "ReplicatedStorage", "ReplicatedStorage")
     client = direct_child(replicated_storage, "Client", "Folder")
 
@@ -161,17 +176,33 @@ def validate(place_path: str) -> None:
 
     shared = direct_child(replicated_storage, "Shared", "Folder")
     feedback_config = direct_child(shared, "FeedbackConfig", "ModuleScript")
+    damage_config = direct_child(shared, "DamageConfig", "ModuleScript")
     assert "ImpactLifetime" not in source_of(feedback_config)
+    damage_config_source = source_of(damage_config)
+    assert "PlayerMaxHP = 100" in damage_config_source
+    assert "DefaultZombieHP = 10" in damage_config_source
     direct_child(shared, "ShopConfig", "ModuleScript")
 
     server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
+    all_zombie_services = [
+        item for item in root.iter("Item")
+        if instance_name(item) == "ZombieService" and item.get("class") == "ModuleScript"
+    ]
+    assert len(all_zombie_services) == 1 and all_zombie_services[0] in server_scripts.findall("Item"), (
+        "generated place must contain exactly one authoritative ServerScriptService.ZombieService"
+    )
     server_modules = {}
-    for name in ("CombatService", "KillCounter", "ShopRules", "ShopService", "ShopSessionStore"):
+    for name in (
+        "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
+        "ShopRules", "ShopService", "ShopSessionStore", "ZombieRules", "ZombieService",
+    ):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
     server_bootstrap_source = source_of(server_bootstrap)
     for fragment in (
         "require(script.Parent.ShopService)",
+        "require(script.Parent.PlayerHealthService)",
+        "PlayerHealthService.Start()",
         "ShopService.Start()",
         "CombatService.Start(ZombieService, ShopService)",
     ):
@@ -189,11 +220,63 @@ def validate(place_path: str) -> None:
         'local KILL_ATTRIBUTE = "SessionKills"',
         "killCounter:Add(player, defeatCount)",
         "feedbackRemote:FireClient(player, weaponName, feedbackRoots)",
-        "if defeatedRoot then",
+        "local defeatedRoot, released = defeatZombie(model, root, weaponName, config)",
+        "if released then",
+        "if defeatedRoot and #feedbackRoots < effectLimit then",
         "FeedbackConfig.GetEffectCount(config.MaxTargets)",
         "killCounter:Remove(player)",
     ):
         assert fragment in combat_service_source, f"CombatService feedback contract missing: {fragment}"
+    for fragment in (
+        'local DAMAGE_REMOTE_NAME = "ZombieDamageFeedback"',
+        "zombieService.ApplyDamage(model, config.BaseDamage)",
+        "damageRemote:FireAllClients(damageResults)",
+        "if result.Lethal then",
+        "AttackDamage = result.AttackDamage",
+        "CurrentHP = result.AfterHP",
+    ):
+        assert fragment in combat_service_source, f"CombatService damage contract missing: {fragment}"
+
+    damage_rules_source = source_of(server_modules["DamageRules"])
+    for fragment in (
+        'state.Lifecycle ~= "ACTIVE"',
+        'state.Lifecycle = "DEFEATED"',
+        "AttackDamage = appliedDamage",
+        "ActualHPLoss = actualHPLoss",
+        "BeforeHP = beforeHP",
+        "AfterHP = afterHP",
+        "local actualHPLoss = beforeHP - afterHP",
+    ):
+        assert fragment in damage_rules_source, f"DamageRules lethal guard missing: {fragment}"
+    zombie_service_source = source_of(server_modules["ZombieService"])
+    for fragment in (
+        "local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)",
+        'model:SetAttribute("MaxHP", maxHP)',
+        'model:SetAttribute("CurrentHP", maxHP)',
+        "function ZombieService.ApplyDamage(model: Model, damage: number)",
+        "function ZombieService.Spawn(): Model?",
+    ):
+        assert fragment in zombie_service_source, f"Zombie HP implementation missing: {fragment}"
+    spawn_rules_source = source_of(server_modules["ZombieRules"])
+    assert "ResolveSpawnHP" not in spawn_rules_source
+    player_health_source = source_of(server_modules["PlayerHealthService"])
+    for fragment in (
+        "humanoid.MaxHealth = DamageConfig.PlayerMaxHP",
+        "humanoid.Health = DamageConfig.PlayerMaxHP",
+        'player.CharacterAdded:Connect',
+    ):
+        assert fragment in player_health_source, f"Player HP foundation missing: {fragment}"
+    damage_feedback_source = source_of(modules["CombatFeedbackController"])
+    for fragment in (
+        'WaitForChild("ZombieDamageFeedback")',
+        'billboard.Name = "ZombieDamageNumber"',
+        'gui.Name = "ZombieHealthBar"',
+        "DamageConfig.ZombieHealthBarLifetime",
+        "result.Lethal == true",
+        'type(result.AttackDamage) == "number"',
+        "createDamageNumber(root, result.AttackDamage,",
+    ):
+        assert fragment in damage_feedback_source, f"Damage presentation missing: {fragment}"
     assert "Position = hitPosition" not in combat_service_source
     assert "createImpact" not in feedback_source
     assert "ZombieImpactFlash" not in feedback_source
@@ -216,8 +299,9 @@ def validate(place_path: str) -> None:
     print(
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
-        "/ CombatFeedbackController / ShopController; "
-        "ServerScriptService.Bootstrap -> CombatService -> KillCounter also resolved"
+        "/ CombatFeedbackController damage UI / ShopController; "
+        "ServerScriptService.Bootstrap -> CombatService -> DamageRules / ZombieService / "
+        "PlayerHealthService also resolved"
     )
 
 
