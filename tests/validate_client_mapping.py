@@ -68,6 +68,7 @@ def validate(place_path: str) -> None:
         "ShopController",
         "ShopPresentation",
         "WaveHud",
+        "ProgressionHud",
         "WeaponPresenter",
         "WeaponSwitcher",
         "WeaponSwitcherRules",
@@ -85,7 +86,9 @@ def validate(place_path: str) -> None:
         'clientModules:WaitForChild("CombatController")',
         'clientModules:WaitForChild("CombatFeedbackController")',
         'clientModules:WaitForChild("ShopController")',
+        'clientModules:WaitForChild("ProgressionHud")',
         "CombatFeedbackController.Start()",
+        "ProgressionHud.Start()",
         "ShopController.Start(CombatController)",
     )
     for fragment in required_bootstrap_fragments:
@@ -194,17 +197,20 @@ def validate(place_path: str) -> None:
     server_modules = {}
     for name in (
         "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
+        "ProgressionRules", "ProgressionService", "ProgressionSessionStore",
         "ShopRules", "ShopService", "ShopSessionStore", "ZombieRules", "ZombieService",
     ):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
     server_bootstrap_source = source_of(server_bootstrap)
     for fragment in (
+        "require(script.Parent.ProgressionService)",
         "require(script.Parent.ShopService)",
         "require(script.Parent.PlayerHealthService)",
         "PlayerHealthService.Start()",
         "ShopService.Start()",
-        "CombatService.Start(ZombieService, ShopService)",
+        "ProgressionService.Start()",
+        "CombatService.Start(ZombieService, ShopService, ProgressionService)",
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
@@ -225,17 +231,60 @@ def validate(place_path: str) -> None:
         "if defeatedRoot and #feedbackRoots < effectLimit then",
         "FeedbackConfig.GetEffectCount(config.MaxTargets)",
         "killCounter:Remove(player)",
+        "progressionService.ResolveFinalAttackDamage(player, config.BaseDamage)",
+        "progressionService.AwardZombieDefeats(player, defeatCount)",
     ):
         assert fragment in combat_service_source, f"CombatService feedback contract missing: {fragment}"
     for fragment in (
         'local DAMAGE_REMOTE_NAME = "ZombieDamageFeedback"',
-        "zombieService.ApplyDamage(model, config.BaseDamage)",
+        "zombieService.ApplyDamage(model, attackDamage)",
         "damageRemote:FireAllClients(damageResults)",
         "if result.Lethal then",
         "AttackDamage = result.AttackDamage",
         "CurrentHP = result.AfterHP",
     ):
         assert fragment in combat_service_source, f"CombatService damage contract missing: {fragment}"
+
+    progression_service_source = source_of(server_modules["ProgressionService"])
+    for fragment in (
+        'local REMOTE_FOLDER_NAME = "ProgressionRemotes"',
+        'local STATE_CHANGED_NAME = "StateChanged"',
+        'player:SetAttribute("PlayerLevel", state.Level)',
+        'player:SetAttribute("CurrentXP", state.XP)',
+        'player:SetAttribute("RequiredXP"',
+        'ReplicatedStorage:FindFirstChild("WaveNumber")',
+        "ProgressionRules.AwardZombieDefeats(state, wave, defeatCount)",
+        "stateChangedRemote:FireClient(player",
+        "store:Remove(player)",
+    ):
+        assert fragment in progression_service_source, f"ProgressionService contract missing: {fragment}"
+    for fragment in (
+        "require(script.Parent.ProgressionRules)",
+        "require(script.Parent.ProgressionSessionStore)",
+    ):
+        assert fragment in progression_service_source, f"ProgressionService dependency missing: {fragment}"
+    progression_rules_source = source_of(server_modules["ProgressionRules"])
+    for fragment in (
+        "BASE_REQUIRED_XP = 100",
+        "REQUIRED_XP_PER_LEVEL = 50",
+        "DAMAGE_INCREASE_PER_LEVEL = 0.05",
+        "math.round(baseDamage * ProgressionRules.DamageMultiplier(level))",
+        "while state.XP >= ProgressionRules.RequiredXP(state.Level) do",
+        "BASE_ZOMBIE_XP + math.floor(safeWave / XP_WAVE_DIVISOR)",
+    ):
+        assert fragment in progression_rules_source, f"ProgressionRules contract missing: {fragment}"
+    progression_hud_source = source_of(modules["ProgressionHud"])
+    for fragment in (
+        'gui.Name = GUI_NAME',
+        'panel.Name = "ProgressionPanel"',
+        'barBackground.Name = "XPBarBackground"',
+        'barFill.Name = "XPBarFill"',
+        'xpLabel.Text = string.format("%d / %d XP"',
+        'levelUpLabel.Name = "LevelUpFeedback"',
+        "DAMAGE +%d%%",
+        'stateChanged.OnClientEvent:Connect',
+    ):
+        assert fragment in progression_hud_source, f"Progression HUD contract missing: {fragment}"
 
     damage_rules_source = source_of(server_modules["DamageRules"])
     for fragment in (
@@ -300,8 +349,8 @@ def validate(place_path: str) -> None:
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
         "/ CombatFeedbackController damage UI / ShopController; "
-        "ServerScriptService.Bootstrap -> CombatService -> DamageRules / ZombieService / "
-        "PlayerHealthService also resolved"
+        "ServerScriptService.Bootstrap -> CombatService -> ProgressionService / "
+        "DamageRules / ZombieService / PlayerHealthService also resolved"
     )
 
 

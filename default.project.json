@@ -22,6 +22,9 @@
         "CombatFeedbackController": {
           "$path": "src/client/CombatFeedbackController.lua"
         },
+        "ProgressionHud": {
+          "$path": "src/client/ProgressionHud.lua"
+        },
         "CombatController": {
           "$path": "src/client/CombatController.lua"
         },
