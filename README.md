@@ -251,7 +251,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 ## Damage / HP Foundation（GB-021）
 
 - Weapon BaseDamageは`WeaponConfig`をsingle sourceとして保持します。Bat 10、Pan 15、Hammer 25、Blower 18、Thunder Rod 30。既存のinterval、hit shape、range、max targets、knockback、special behaviorとShop価格は維持します。
-- `ZombieService`は通常Wave spawnでHP 10のZombieを生成し、Server registry entryとModel attributeにMaxHP / CurrentHPを保持します。`Spawn(maxHP)`はServer-onlyのHuman Gate seamで、Studio Server Command Barから`require(game.ServerScriptService.ZombieService).Spawn(15)`として15 HP個体を追加生成できます。
+- `ZombieService`は通常Wave spawnでHP 10のZombieを生成し、Server registry entryとModel attributeにMaxHP / CurrentHPを保持します。`Spawn(maxHP)`はServer-onlyのHuman Gate seamで、Studio Server Command Barから`require(game.ServerScriptService.ZombieService).Spawn(15)`として`TEST HP 15` marker付き個体を追加生成できます。Spawn拒否理由、個体ID / HP / Humanoid state、Hit / lethal / Session Kills / Client feedbackを`[GB021 HP TEST]`ログへ出します。
 - `DamageRules`はACTIVE個体だけにDamageを適用し、lethal transition時にLifecycleを同期的にDEFEATEDへ変更します。CombatServiceはlethal個体だけを既存ZombieService.Release → knockback → cleanupへ送り、Session KillsもRelease成功時だけ増やします。
 - `ZombieDamageFeedback`はServer結果のDamage / CurrentHP / MaxHP / lethal stateをClientへ送ります。Clientは短命Damage Numberを表示し、non-lethal hitのZombieだけにHP barを最大1.5秒表示します。再被弾で表示期限を更新し、lethal hitでは即時削除します。
 - `PlayerHealthService`はCharacter spawn / respawn時にHumanoid MaxHealthとHealthを100へ設定し、Playerの`MaxHP` attributeも100にします。Zombie attack、Player Damage、Level / XP / Coins reward、Wave scaling、Death run reset、persistenceはGB-021に含めません。

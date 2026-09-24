@@ -172,7 +172,7 @@ def validate(place_path: str) -> None:
     server_modules = {}
     for name in (
         "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
-        "ShopRules", "ShopService", "ShopSessionStore", "ZombieService",
+        "ShopRules", "ShopService", "ShopSessionStore", "ZombieRules", "ZombieService",
     ):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
@@ -210,6 +210,8 @@ def validate(place_path: str) -> None:
         "zombieService.ApplyDamage(model, config.BaseDamage)",
         "damageRemote:FireAllClients(damageResults)",
         "if result.Lethal then",
+        '"[GB021 HP TEST] HIT id=%s weapon=%s baseDamage=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s"',
+        '"[GB021 HP TEST] RELEASED id=%s sessionKills=%d"',
     ):
         assert fragment in combat_service_source, f"CombatService damage contract missing: {fragment}"
 
@@ -219,12 +221,24 @@ def validate(place_path: str) -> None:
     zombie_service_source = source_of(server_modules["ZombieService"])
     for fragment in (
         "local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)",
-        "local maxHP = requestedMaxHP or DamageConfig.DefaultZombieHP",
+        "ZombieRules.ResolveSpawnHP(",
+        "local maxHP, testSpawn, rejection = ZombieRules.ResolveSpawnHP(",
         'model:SetAttribute("MaxHP", maxHP)',
         'model:SetAttribute("CurrentHP", maxHP)',
+        'model:SetAttribute("GB021HPTest", testSpawn)',
+        'marker.Name = "GB021HPTestMarker"',
+        '"[GB021 HP TEST] SPAWN id=%s maxHP=%d currentHP=%d lifecycle=ACTIVE humanoid=%d/%d"',
         "function ZombieService.ApplyDamage(model: Model, damage: number)",
     ):
         assert fragment in zombie_service_source, f"Zombie HP implementation missing: {fragment}"
+    spawn_rules_source = source_of(server_modules["ZombieRules"])
+    for fragment in (
+        "function ZombieRules.ResolveSpawnHP(",
+        'return nil, isTestSpawn, "ACTIVE_CAP"',
+        'return nil, isTestSpawn, "NOT_READY"',
+        "local maxHP = if isTestSpawn then requestedMaxHP else defaultMaxHP",
+    ):
+        assert fragment in spawn_rules_source, f"Zombie test spawn contract missing: {fragment}"
     player_health_source = source_of(server_modules["PlayerHealthService"])
     for fragment in (
         "humanoid.MaxHealth = DamageConfig.PlayerMaxHP",
@@ -239,6 +253,8 @@ def validate(place_path: str) -> None:
         'gui.Name = "ZombieHealthBar"',
         "DamageConfig.ZombieHealthBarLifetime",
         "result.Lethal == true",
+        '"[GB021 HP TEST] CLIENT id=%s damage=%d hp=%d/%d lethal=%s"',
+        '"[GB021 HP TEST] HP BAR SHOWN id=%s hp=%d/%d"',
     ):
         assert fragment in damage_feedback_source, f"Damage presentation missing: {fragment}"
     assert "Position = hitPosition" not in combat_service_source

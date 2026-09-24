@@ -272,12 +272,31 @@ local function performAttack(player: Player)
 	local targets = queryTargets(root, config)
 	local feedbackRoots = {}
 	local damageResults = {}
+	local testReleaseIds = {}
 	local effectLimit = FeedbackConfig.GetEffectCount(config.MaxTargets)
 	local defeatCount = 0
 	for index = 1, math.min(#targets, config.MaxTargets) do
 		local model = targets[index]
 		local result = zombieService.ApplyDamage(model, config.BaseDamage)
 		if result then
+			if model:GetAttribute("GB021HPTest") == true then
+				local humanoid = model:FindFirstChildOfClass("Humanoid")
+				local humanoidHealth = if humanoid then humanoid.Health else -1
+				local humanoidMaxHealth = if humanoid then humanoid.MaxHealth else -1
+				print(string.format(
+					"[GB021 HP TEST] HIT id=%s weapon=%s baseDamage=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s",
+					model.Name,
+					weaponName,
+					config.BaseDamage,
+					result.CurrentHP + result.Damage,
+					result.CurrentHP,
+					result.MaxHP,
+					tostring(result.Lethal),
+					humanoidHealth,
+					humanoidMaxHealth,
+					tostring(model:GetAttribute("ZombieState"))
+				))
+			end
 			table.insert(damageResults, {
 				Model = model,
 				Damage = result.Damage,
@@ -289,6 +308,9 @@ local function performAttack(player: Player)
 				local defeatedRoot, released = defeatZombie(model, root, weaponName, config)
 				if released then
 					defeatCount += 1
+					if model:GetAttribute("GB021HPTest") == true then
+						table.insert(testReleaseIds, model.Name)
+					end
 					if defeatedRoot and #feedbackRoots < effectLimit then
 						table.insert(feedbackRoots, defeatedRoot)
 					end
@@ -300,7 +322,11 @@ local function performAttack(player: Player)
 		damageRemote:FireAllClients(damageResults)
 	end
 	if defeatCount > 0 then
-		player:SetAttribute(KILL_ATTRIBUTE, killCounter:Add(player, defeatCount))
+		local kills = killCounter:Add(player, defeatCount)
+		player:SetAttribute(KILL_ATTRIBUTE, kills)
+		for _, zombieId in testReleaseIds do
+			print(string.format("[GB021 HP TEST] RELEASED id=%s sessionKills=%d", zombieId, kills))
+		end
 		feedbackRemote:FireClient(player, weaponName, feedbackRoots)
 	end
 end

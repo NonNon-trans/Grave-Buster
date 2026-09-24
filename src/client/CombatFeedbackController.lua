@@ -149,10 +149,23 @@ local function presentDamageResults(results)
 			local model = result.Model
 			local root = model:FindFirstChild("Head") or model:FindFirstChild("HumanoidRootPart")
 			if root and root:IsA("BasePart") and root:IsDescendantOf(workspace) then
+				if model:GetAttribute("GB021HPTest") == true then
+					print(string.format(
+						"[GB021 HP TEST] CLIENT id=%s damage=%d hp=%d/%d lethal=%s",
+						model.Name,
+						result.Damage,
+						result.CurrentHP,
+						result.MaxHP,
+						tostring(result.Lethal == true)
+					))
+				end
 				createDamageNumber(root, result.Damage, Color3.fromRGB(255, 239, 179))
 				if result.Lethal == true or result.CurrentHP <= 0 then
 					removeHealthBar(model)
 				else
+					if model:GetAttribute("GB021HPTest") == true then
+						print(string.format("[GB021 HP TEST] HP BAR SHOWN id=%s hp=%d/%d", model.Name, result.CurrentHP, result.MaxHP))
+					end
 					showHealthBar(model, root, result.CurrentHP, result.MaxHP)
 				end
 			end

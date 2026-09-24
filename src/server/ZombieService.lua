@@ -248,17 +248,28 @@ function ZombieService.Start()
 end
 
 function ZombieService.Spawn(requestedMaxHP: number?): Model?
-	if not running or not container or not HordeConfig.CanSpawn(registry:Count()) then
-		return nil
-	end
-	local maxHP = requestedMaxHP or DamageConfig.DefaultZombieHP
-	if type(maxHP) ~= "number" or maxHP % 1 ~= 0 or maxHP < 1 or maxHP > 1000 then
+	local maxHP, testSpawn, rejection = ZombieRules.ResolveSpawnHP(
+		requestedMaxHP,
+		DamageConfig.DefaultZombieHP,
+		running and container ~= nil,
+		registry:Count(),
+		HordeConfig.ActiveZombieCap
+	)
+	if not maxHP then
+		if testSpawn then
+			local reason = if rejection == "ACTIVE_CAP"
+				then string.format("active cap reached (%d/%d)", registry:Count(), HordeConfig.ActiveZombieCap)
+				elseif rejection == "NOT_READY" then "ZombieService is not ready"
+				else string.format("invalid MaxHP %s", tostring(requestedMaxHP))
+			warn(string.format("[GB021 HP TEST] Spawn rejected: %s", reason))
+		end
 		return nil
 	end
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
 	local model, humanoid, root, joints = createZombieModel(spawnCursor)
 	model:SetAttribute("ZombieState", "ACTIVE")
+	model:SetAttribute("GB021HPTest", testSpawn)
 	model:SetAttribute("MaxHP", maxHP)
 	model:SetAttribute("CurrentHP", maxHP)
 	humanoid.MaxHealth = maxHP
@@ -266,6 +277,30 @@ function ZombieService.Spawn(requestedMaxHP: number?): Model?
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
+	if testSpawn then
+		local marker = Instance.new("BillboardGui")
+		marker.Name = "GB021HPTestMarker"
+		marker.Adornee = model:FindFirstChild("Head") or root
+		marker.Size = UDim2.fromOffset(106, 24)
+		marker.StudsOffsetWorldSpace = Vector3.new(0, 4.1, 0)
+		marker.AlwaysOnTop = true
+		marker.MaxDistance = 180
+		marker.Parent = model
+		local label = Instance.new("TextLabel")
+		label.Name = "MarkerText"
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundColor3 = Color3.fromRGB(118, 47, 28)
+		label.BackgroundTransparency = 0.1
+		label.BorderSizePixel = 0
+		label.Font = Enum.Font.GothamBold
+		label.Text = string.format("TEST HP %d", maxHP)
+		label.TextColor3 = Color3.fromRGB(255, 242, 220)
+		label.TextScaled = true
+		label.Parent = marker
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = label
+	end
 
 	local approachSlot = (spawnCursor - 1) % HordeConfig.ActiveZombieCap
 	local approachRing = math.floor(approachSlot / APPROACH_SLOTS_PER_RING)
@@ -284,6 +319,12 @@ function ZombieService.Spawn(requestedMaxHP: number?): Model?
 		CurrentHP = maxHP,
 		Lifecycle = "ACTIVE",
 	})
+	if testSpawn then
+		print(string.format(
+			"[GB021 HP TEST] SPAWN id=%s maxHP=%d currentHP=%d lifecycle=ACTIVE humanoid=%d/%d",
+			model.Name, maxHP, maxHP, humanoid.Health, humanoid.MaxHealth
+		))
+	end
 	return model
 end
 

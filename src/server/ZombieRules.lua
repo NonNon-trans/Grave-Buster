@@ -2,6 +2,27 @@
 
 local ZombieRules = {}
 
+function ZombieRules.ResolveSpawnHP(
+	requestedMaxHP: number?,
+	defaultMaxHP: number,
+	serviceReady: boolean,
+	activeCount: number,
+	activeCap: number
+): (number?, boolean, string?)
+	local isTestSpawn = requestedMaxHP ~= nil
+	if not serviceReady then
+		return nil, isTestSpawn, "NOT_READY"
+	end
+	if activeCount >= activeCap then
+		return nil, isTestSpawn, "ACTIVE_CAP"
+	end
+	local maxHP = if isTestSpawn then requestedMaxHP else defaultMaxHP
+	if type(maxHP) ~= "number" or maxHP ~= maxHP or maxHP % 1 ~= 0 or maxHP < 1 or maxHP > 1000 then
+		return nil, isTestSpawn, "INVALID_HP"
+	end
+	return maxHP, isTestSpawn, nil
+end
+
 function ZombieRules.GetValidRoot(player: Player?, playersService: Players): BasePart?
 	if not player or player.Parent ~= playersService then
 		return nil
