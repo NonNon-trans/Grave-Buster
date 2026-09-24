@@ -3,7 +3,6 @@
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServerScriptService = game:GetService("ServerScriptService")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
@@ -33,7 +32,6 @@ type ZombieEntry = {
 }
 
 local ZombieService = {}
-local moduleEvaluationId = game:GetService("HttpService"):GenerateGUID(false)
 local ZOMBIE_CONTAINER_NAME = "Zombies"
 local COLLISION_GROUP = "Zombie"
 local SPAWN_EDGE = 76
@@ -44,42 +42,6 @@ local registry = ActiveZombieRegistry.new()
 local container: Folder? = nil
 local spawnCursor = 0
 local running = false
-
-local function getReadinessDiagnostics()
-	return {
-		ModulePath = script:GetFullName(),
-		ModuleInstance = tostring(script),
-		ModuleEvaluationId = moduleEvaluationId,
-		ServiceTable = tostring(ZombieService),
-		Ready = running and container ~= nil,
-		ContainerPath = if container then container:GetFullName() else nil,
-	}
-end
-
-local function ensureHPTestHarness()
-	local existing = ServerScriptService:FindFirstChild("GB021HPTestSpawn")
-	if existing and not existing:IsA("BindableFunction") then
-		existing:Destroy()
-		existing = nil
-	end
-
-	local harness = existing :: BindableFunction?
-	if not harness then
-		harness = Instance.new("BindableFunction")
-		harness.Name = "GB021HPTestSpawn"
-		harness.Parent = ServerScriptService
-	end
-
-	harness.OnInvoke = function(requestedMaxHP: number?)
-		local state = getReadinessDiagnostics()
-		print(string.format(
-			"[GB021 TEST HARNESS] path=%s moduleInstance=%s evaluation=%s serviceTable=%s ready=%s",
-			state.ModulePath, state.ModuleInstance, state.ModuleEvaluationId,
-			state.ServiceTable, tostring(state.Ready)
-		))
-		return ZombieService.Spawn(requestedMaxHP)
-	end
-end
 
 local function createPart(
 	model: Model,
@@ -263,7 +225,6 @@ local function updateLoop()
 end
 
 function ZombieService.Start()
-	ensureHPTestHarness()
 	if running then
 		return
 	end
@@ -286,33 +247,15 @@ function ZombieService.Start()
 	task.spawn(updateLoop)
 end
 
-function ZombieService.GetRuntimeDiagnostics()
-	return getReadinessDiagnostics()
-end
-
-function ZombieService.Spawn(requestedMaxHP: number?): Model?
-	local maxHP, testSpawn, rejection = ZombieRules.ResolveSpawnHP(
-		requestedMaxHP,
-		DamageConfig.DefaultZombieHP,
-		running and container ~= nil,
-		registry:Count(),
-		HordeConfig.ActiveZombieCap
-	)
-	if not maxHP then
-		if testSpawn then
-			local reason = if rejection == "ACTIVE_CAP"
-				then string.format("active cap reached (%d/%d)", registry:Count(), HordeConfig.ActiveZombieCap)
-				elseif rejection == "NOT_READY" then "ZombieService is not ready"
-				else string.format("invalid MaxHP %s", tostring(requestedMaxHP))
-			warn(string.format("[GB021 HP TEST] Spawn rejected: %s", reason))
-		end
+function ZombieService.Spawn(): Model?
+	if not running or not container or registry:Count() >= HordeConfig.ActiveZombieCap then
 		return nil
 	end
+	local maxHP = DamageConfig.DefaultZombieHP
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
 	local model, humanoid, root, joints = createZombieModel(spawnCursor)
 	model:SetAttribute("ZombieState", "ACTIVE")
-	model:SetAttribute("GB021HPTest", testSpawn)
 	model:SetAttribute("MaxHP", maxHP)
 	model:SetAttribute("CurrentHP", maxHP)
 	humanoid.MaxHealth = maxHP
@@ -320,31 +263,6 @@ function ZombieService.Spawn(requestedMaxHP: number?): Model?
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
-	if testSpawn then
-		local marker = Instance.new("BillboardGui")
-		marker.Name = "GB021HPTestMarker"
-		marker.Adornee = model:FindFirstChild("Head") or root
-		marker.Size = UDim2.fromOffset(106, 24)
-		marker.StudsOffsetWorldSpace = Vector3.new(0, 4.1, 0)
-		marker.AlwaysOnTop = true
-		marker.MaxDistance = 180
-		marker.Parent = model
-		local label = Instance.new("TextLabel")
-		label.Name = "MarkerText"
-		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundColor3 = Color3.fromRGB(118, 47, 28)
-		label.BackgroundTransparency = 0.1
-		label.BorderSizePixel = 0
-		label.Font = Enum.Font.GothamBold
-		label.Text = string.format("TEST HP %d", maxHP)
-		label.TextColor3 = Color3.fromRGB(255, 242, 220)
-		label.TextScaled = true
-		label.Parent = marker
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 4)
-		corner.Parent = label
-	end
-
 	local approachSlot = (spawnCursor - 1) % HordeConfig.ActiveZombieCap
 	local approachRing = math.floor(approachSlot / APPROACH_SLOTS_PER_RING)
 	local ringSlot = approachSlot % APPROACH_SLOTS_PER_RING
@@ -362,12 +280,6 @@ function ZombieService.Spawn(requestedMaxHP: number?): Model?
 		CurrentHP = maxHP,
 		Lifecycle = "ACTIVE",
 	})
-	if testSpawn then
-		print(string.format(
-			"[GB021 HP TEST] SPAWN id=%s maxHP=%d currentHP=%d lifecycle=ACTIVE humanoid=%d/%d",
-			model.Name, maxHP, maxHP, humanoid.Health, humanoid.MaxHealth
-		))
-	end
 	return model
 end
 

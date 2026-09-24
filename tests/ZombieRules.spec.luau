@@ -2,16 +2,6 @@
 
 local ZombieRules = require("../src/server/ZombieRules")
 
-local hp15, isTest, spawnError = ZombieRules.ResolveSpawnHP(15, 10, true, 2, 28)
-assert(hp15 == 15 and isTest and spawnError == nil)
-local defaultHP, isWaveSpawn = ZombieRules.ResolveSpawnHP(nil, 10, true, 2, 28)
-assert(defaultHP == 10 and not isWaveSpawn)
-assert(select(1, ZombieRules.ResolveSpawnHP(15, 10, true, 28, 28)) == nil)
-assert(select(3, ZombieRules.ResolveSpawnHP(15, 10, true, 28, 28)) == "ACTIVE_CAP")
-assert(select(1, ZombieRules.ResolveSpawnHP(15, 10, false, 0, 28)) == nil)
-assert(select(3, ZombieRules.ResolveSpawnHP(15, 10, false, 0, 28)) == "NOT_READY")
-assert(select(1, ZombieRules.ResolveSpawnHP(1.5, 10, true, 0, 28)) == nil)
-
 local vectorMetatable = {}
 vectorMetatable.__index = vectorMetatable
 vectorMetatable.__sub = function(left, right)

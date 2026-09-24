@@ -41,6 +41,21 @@ def source_of(item: ET.Element) -> str:
 
 def validate(place_path: str) -> None:
     root = ET.parse(place_path).getroot()
+    generated_sources = "\n".join(source_of(item) for item in root.iter("Item"))
+    investigation_residue = (
+        "[GB021 INIT]",
+        "[GB021 HP TEST]",
+        "[GB021 TEST HARNESS]",
+        "GB021HPTestSpawn",
+        "GB021HPTestMarker",
+        "TEST HP ",
+        "GetRuntimeDiagnostics",
+        "ModuleEvaluationId",
+        "ResolveSpawnHP",
+    )
+    for residue in investigation_residue:
+        assert residue not in generated_sources, f"investigation-only source remains: {residue}"
+
     replicated_storage = direct_child(root, "ReplicatedStorage", "ReplicatedStorage")
     client = direct_child(replicated_storage, "Client", "Folder")
 
@@ -190,9 +205,6 @@ def validate(place_path: str) -> None:
         "PlayerHealthService.Start()",
         "ShopService.Start()",
         "CombatService.Start(ZombieService, ShopService)",
-        "ZombieService.GetRuntimeDiagnostics()",
-        '"[GB021 INIT] path=%s moduleInstance=%s evaluation=%s serviceTable=%s readyBefore=%s"',
-        '"[GB021 INIT] path=%s moduleInstance=%s evaluation=%s serviceTable=%s readyAfter=%s container=%s"',
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
@@ -220,10 +232,8 @@ def validate(place_path: str) -> None:
         "zombieService.ApplyDamage(model, config.BaseDamage)",
         "damageRemote:FireAllClients(damageResults)",
         "if result.Lethal then",
-        '"[GB021 HP TEST] HIT id=%s weapon=%s attackDamage=%d actualHPLoss=%d beforeHP=%d afterHP=%d maxHP=%d lethal=%s humanoid=%d/%d lifecycle=%s"',
         "AttackDamage = result.AttackDamage",
         "CurrentHP = result.AfterHP",
-        '"[GB021 HP TEST] RELEASED id=%s sessionKills=%d"',
     ):
         assert fragment in combat_service_source, f"CombatService damage contract missing: {fragment}"
 
@@ -241,30 +251,14 @@ def validate(place_path: str) -> None:
     zombie_service_source = source_of(server_modules["ZombieService"])
     for fragment in (
         "local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)",
-        "ZombieRules.ResolveSpawnHP(",
-        "local maxHP, testSpawn, rejection = ZombieRules.ResolveSpawnHP(",
         'model:SetAttribute("MaxHP", maxHP)',
         'model:SetAttribute("CurrentHP", maxHP)',
-        'model:SetAttribute("GB021HPTest", testSpawn)',
-        'marker.Name = "GB021HPTestMarker"',
-        '"[GB021 HP TEST] SPAWN id=%s maxHP=%d currentHP=%d lifecycle=ACTIVE humanoid=%d/%d"',
         "function ZombieService.ApplyDamage(model: Model, damage: number)",
-        'harness.Name = "GB021HPTestSpawn"',
-        "harness.OnInvoke = function(requestedMaxHP: number?)",
-        "return ZombieService.Spawn(requestedMaxHP)",
-        "function ZombieService.GetRuntimeDiagnostics()",
-        "ModuleEvaluationId = moduleEvaluationId",
-        '"[GB021 TEST HARNESS] path=%s moduleInstance=%s evaluation=%s serviceTable=%s ready=%s"',
+        "function ZombieService.Spawn(): Model?",
     ):
         assert fragment in zombie_service_source, f"Zombie HP implementation missing: {fragment}"
     spawn_rules_source = source_of(server_modules["ZombieRules"])
-    for fragment in (
-        "function ZombieRules.ResolveSpawnHP(",
-        'return nil, isTestSpawn, "ACTIVE_CAP"',
-        'return nil, isTestSpawn, "NOT_READY"',
-        "local maxHP = if isTestSpawn then requestedMaxHP else defaultMaxHP",
-    ):
-        assert fragment in spawn_rules_source, f"Zombie test spawn contract missing: {fragment}"
+    assert "ResolveSpawnHP" not in spawn_rules_source
     player_health_source = source_of(server_modules["PlayerHealthService"])
     for fragment in (
         "humanoid.MaxHealth = DamageConfig.PlayerMaxHP",
@@ -279,10 +273,8 @@ def validate(place_path: str) -> None:
         'gui.Name = "ZombieHealthBar"',
         "DamageConfig.ZombieHealthBarLifetime",
         "result.Lethal == true",
-        '"[GB021 HP TEST] CLIENT id=%s attackDamage=%d hp=%d/%d lethal=%s"',
         'type(result.AttackDamage) == "number"',
         "createDamageNumber(root, result.AttackDamage,",
-        '"[GB021 HP TEST] HP BAR SHOWN id=%s hp=%d/%d"',
     ):
         assert fragment in damage_feedback_source, f"Damage presentation missing: {fragment}"
     assert "Position = hitPosition" not in combat_service_source
