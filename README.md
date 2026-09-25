@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-024 — Coins & Shop Economy**
+現在Phase: **GB-025 — Death / Run Reset / Best Wave**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -10,7 +10,7 @@ Thunder Battleとは独立した新規Projectです。
 
 GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
-5種類のWeaponはRange・Hit shape・Knockbackで差別化し、ZombieはPlayerへ接近しますが攻撃しません。
+5種類のWeaponはRange・Hit shape・Knockbackで差別化します。GB-025からZombieはSpawnWaveに応じたDamageで近接攻撃し、全Player死亡時はRunをWave 1から再開します。
 Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownership、Player Level / XPはServer Authorityです。Level / XP、Currency、ownershipはSession-onlyで、DataStoreは未実装です。
 
 ## Platform direction
@@ -37,6 +37,7 @@ Grave-Buster/
 │   │   ├── ProgressionRules.lua
 │   │   ├── ProgressionService.lua
 │   │   ├── ProgressionSessionStore.lua
+│   │   ├── RunRules.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
 │   │   ├── ShopSessionStore.lua
@@ -53,6 +54,7 @@ Grave-Buster/
 │   │   ├── ShopController.lua
 │   │   ├── ShopPresentation.lua
 │   │   ├── ProgressionHud.lua
+│   │   ├── PlayerHealthHud.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
@@ -92,9 +94,9 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop ownership / purchase validation、Level / XP / Coins |
+| `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Session Shop ownership / purchase validation、Player HP、Level / XP / Coins / Best Wave |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression / HP UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -302,6 +304,15 @@ Human Gate未実施のため、Static validationは視覚・操作確認の代�
 - Balance sanity: Wave 1の15 kill + clearで25 Coins、Wave 2で累計65 Coins、Wave 3 killは各2 Coins。80 CoinsでPanを購入できます。
 - Human Gate / static testsはHuman runtime感触の代わりではありません。
 
+
+## Death / Run Reset / Best Wave（GB-025）
+
+- Zombieはspawn時のimmutable `SpawnWave`から確定した`ZombieDamage`を使い、近接距離で各個体1.0秒間隔のServer-authoritative攻撃を行います。全AI updateごとの反復Damageはありません。Player MaxHPは100のままです。
+- `Players.RespawnTime`を2.5秒に設定し、RespawnしたCharacterはHP 100で再構成されます。Respawn Protectionは2秒間有効で、Playerの最初のAttack intentで即時解除します。
+- Humanoid死亡（Reset Characterを含む）をPlayer unavailableとして共有Waveへ通知します。少なくとも一人のHumanが生存中はWave / Zombieを維持します。全Human死亡または最後のPlayer離脱時だけrun generationを一度進め、Waveを0へ戻し、Workspace.Zombies内のACTIVE個体とDefeated bodyをすべて削除し、Wave 1を開始します。再Spawnを待つ間はWave spawnが停止します。
+- Level / XP / Coins / Owned / Equippedは既存session storesで維持されます。`BestWave`はProgressionService stateに追加し、到達Waveが過去記録を超えた時だけ更新して`NEW RECORD! WAVE N`を短く表示します。Wave 1へのrun resetでは記録を下げません。Leaveでsession stateを破棄します。
+- `PlayerHealthHud`は左上KILLS表示の直下に現在HPとbarを表示します。`RunRules.spec.luau`はdamage interval、protected damage、solo / multiplayer reset decision、BestWaveの非減少を検証します。Wave / Zombie integration、Respawn time、Mobile HUD位置はStudio / Published Human Gateで確認してください。
+
 ## Human Studio Check（GB-023）
 
 1. `build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx`をStudioで開き、Playします。Wave 1のZombieはHP10、Wave 2はHP12でspawnし、WaveごとのBaseDamage + Player Level補正でBat / Panのlethal結果が期待通りか確認します。
@@ -439,3 +450,15 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 8. GB-023 Wave clear条件、SpawnWave、Wave scaling、KILLS、XP / Level up、HP / Damage、Combat / Knockback、PC / Mobile、Environmentを回帰確認し、OutputにRuntime Errorがないことを確認します。
 
 Published Mobile Human GateはこのArtifactをTEST ExperienceへPublishし、LandscapeのPhysical Mobile Deviceで実施してください。
+
+
+## Human Studio / Published Mobile Check（GB-025）
+
+1. `build/Grave-Buster-v0.2-GB025-run-reset.rbxlx`をStudioで開き、Playします。PlayerがHP 100でSpawnし、左上KILLSの直下にHP数値とbarが表示されることを確認します。
+2. Zombieが近接するとHPが1秒間隔で減ることを確認します。最初のWaveのDamageは10、Wave 6では12、Wave 13では16です。AIが動くたびに連続Damageしないこと、Zombie DamageにPlayer knockbackがないことを確認します。
+3. Zombieへ近接攻撃させて死亡し、約2.5秒後にHP 100でRespawn、Zombie群が全 cleanup、Wave 1から再開することを確認します。Level / XP / Coins / Owned / Equipped / BestWaveは維持されます。
+4. Roblox標準Reset Characterを実行し、Deathと同じSolo Run Resetになることを確認します。Reset連打や死亡同時発生でもWave 1が二重起動せず、Zombieが再蓄積しないことを確認します。
+5. Respawn直後はZombieに触れても2秒間HPが減らないこと、その間にATTACKするとProtectionが解除されることを確認します。移動はProtection中も可能です。
+6. Waveを過去BestWave以上へ進めて`NEW RECORD! WAVE N`表示を確認し、ResetでWave 1に戻ってもBestWaveが変わらないことを確認します。
+7. 2人以上でTestし、片方を死亡 / Resetしても生存者のWaveとZombieが継続すること、全員が死亡した時だけ共有Waveがcleanup後Wave 1へ戻ることを確認します。
+8. Wave scaling / quota / Intermission 0、Level / XP / Coins、Shop / Owned / Equipped、Slider、Combat / Damage / Knockback / KILLS、PC / Mobile UI、Arena / Fog / Clouds / Spawnを回帰確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceをPublishしたPhysical Mobile DeviceのLandscapeで行います。

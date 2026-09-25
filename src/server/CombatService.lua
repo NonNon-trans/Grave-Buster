@@ -25,6 +25,7 @@ local started = false
 local zombieService = nil
 local shopService = nil
 local progressionService = nil
+local playerHealthService = nil
 local lastAttackAt = {}
 local killCounter = KillCounter.new()
 local feedbackRemote = nil
@@ -269,6 +270,7 @@ local function performAttack(player: Player)
 		return
 	end
 	lastAttackAt[player] = now
+	playerHealthService.EndProtection(player)
 	local attackDamage = progressionService.ResolveFinalAttackDamage(player, config.BaseDamage)
 
 	local targets = queryTargets(root, config)
@@ -314,7 +316,7 @@ local function performAttack(player: Player)
 	end
 end
 
-function CombatService.Start(service, ownershipService, playerProgressionService)
+function CombatService.Start(service, ownershipService, playerProgressionService, healthService)
 	if started then
 		return
 	end
@@ -322,6 +324,7 @@ function CombatService.Start(service, ownershipService, playerProgressionService
 	zombieService = service
 	shopService = ownershipService
 	progressionService = playerProgressionService
+	playerHealthService = healthService
 	WeaponConfig.Validate()
 	FeedbackConfig.Validate()
 

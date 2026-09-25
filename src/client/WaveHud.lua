@@ -107,7 +107,13 @@ function WaveHud.Start()
 			update()
 		end)
 	end)
-	waveValue:GetPropertyChangedSignal("Value"):Connect(update)
+	waveValue:GetPropertyChangedSignal("Value"):Connect(function()
+		if waveValue.Value == 0 then
+			clearGeneration += 1
+			clearedWave = nil
+		end
+		update()
+	end)
 	update()
 end
 

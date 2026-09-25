@@ -6,6 +6,7 @@ export type State = {
 	Level: number,
 	XP: number,
 	Coins: number,
+	BestWave: number,
 }
 
 export type AwardResult = {
@@ -29,7 +30,7 @@ local DAMAGE_INCREASE_PER_LEVEL = 0.05
 local INITIAL_COINS = 0
 
 function ProgressionRules.NewState(): State
-	return { Level = INITIAL_LEVEL, XP = INITIAL_XP, Coins = INITIAL_COINS }
+	return { Level = INITIAL_LEVEL, XP = INITIAL_XP, Coins = INITIAL_COINS, BestWave = 0 }
 end
 
 function ProgressionRules.RequiredXP(level: number): number

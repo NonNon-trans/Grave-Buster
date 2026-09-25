@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ProgressionRules = require(script.Parent.ProgressionRules)
 local ProgressionSessionStore = require(script.Parent.ProgressionSessionStore)
+local RunRules = require(script.Parent.RunRules)
 
 local ProgressionService = {}
 local REMOTE_FOLDER_NAME = "ProgressionRemotes"
@@ -47,6 +48,7 @@ local function applySnapshot(player: Player, state: ProgressionRules.State)
 	player:SetAttribute("CurrentXP", state.XP)
 	player:SetAttribute("RequiredXP", ProgressionRules.RequiredXP(state.Level))
 	player:SetAttribute("Coins", state.Coins)
+	player:SetAttribute("BestWave", state.BestWave)
 end
 
 local function publishSnapshot(player: Player, extra)
@@ -57,6 +59,7 @@ local function publishSnapshot(player: Player, extra)
 		CurrentXP = state.XP,
 		RequiredXP = ProgressionRules.RequiredXP(state.Level),
 		Coins = state.Coins,
+		BestWave = state.BestWave,
 	}
 	if extra then
 		for key, value in extra do
@@ -134,6 +137,15 @@ function ProgressionService.AwardWaveClearBonus(wave: number): number
 		end
 	end
 	return amount
+end
+
+function ProgressionService.RecordWaveReached(wave: number)
+	for _, player in Players:GetPlayers() do
+		local state = store:GetOrCreate(player)
+		if RunRules.RecordBestWave(state, wave) then
+			publishSnapshot(player, { NewRecord = true, RecordWave = wave })
+		end
+	end
 end
 
 function ProgressionService.Start()
