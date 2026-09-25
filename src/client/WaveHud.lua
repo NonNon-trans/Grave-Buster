@@ -33,13 +33,13 @@ function WaveHud.Start()
 	label.Name = "WaveLabel"
 	label.AnchorPoint = Vector2.new(0.5, 0)
 	label.Position = UDim2.fromScale(0.5, 0.025)
-	label.Size = UDim2.fromOffset(132, 32)
+	label.Size = UDim2.fromOffset(184, 32)
 	label.BackgroundColor3 = Color3.fromRGB(30, 32, 30)
 	label.BackgroundTransparency = 0.35
 	label.BorderSizePixel = 0
 	label.Font = Enum.Font.GothamBold
 	label.TextColor3 = Color3.fromRGB(235, 235, 228)
-	label.TextSize = 20
+	label.TextSize = 17
 	label.TextStrokeColor3 = Color3.fromRGB(20, 20, 20)
 	label.TextStrokeTransparency = 0.55
 	label.Parent = gui
@@ -49,6 +49,10 @@ function WaveHud.Start()
 	corner.Parent = label
 
 	local waveValue = ReplicatedStorage:WaitForChild("WaveNumber") :: IntValue
+	local waveRemotes = ReplicatedStorage:WaitForChild("WaveRemotes")
+	local waveCleared = waveRemotes:WaitForChild("WaveCleared") :: RemoteEvent
+	local clearGeneration = 0
+	local clearedWave: number? = nil
 	local emphasisGeneration = 0
 	local activeTween = nil
 	local scale = Instance.new("UIScale")
@@ -80,11 +84,29 @@ function WaveHud.Start()
 		end)
 	end
 	local function update()
-		label.Text = if waveValue.Value > 0 then string.format("WAVE %d", waveValue.Value) else "GET READY"
+		label.Text = if clearedWave
+			then string.format("WAVE %d CLEAR!", clearedWave)
+			else if waveValue.Value > 0 then string.format("WAVE %d", waveValue.Value) else "GET READY"
 		if waveValue.Value > 0 then
 			emphasize()
 		end
 	end
+	waveCleared.OnClientEvent:Connect(function(wave: number)
+		if type(wave) ~= "number" or wave < 1 then
+			return
+		end
+		clearGeneration += 1
+		local generation = clearGeneration
+		clearedWave = wave
+		update()
+		task.delay(FeedbackConfig.WaveClearLifetime, function()
+			if generation ~= clearGeneration or not label.Parent then
+				return
+			end
+			clearedWave = nil
+			update()
+		end)
+	end)
 	waveValue:GetPropertyChangedSignal("Value"):Connect(update)
 	update()
 end

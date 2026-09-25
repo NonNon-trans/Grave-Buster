@@ -6,7 +6,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
-local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)
 local ActiveZombieRegistry = require(script.Parent.ActiveZombieRegistry)
 local DamageRules = require(script.Parent.DamageRules)
 local ZombieRules = require(script.Parent.ZombieRules)
@@ -28,6 +27,8 @@ type ZombieEntry = {
 	AnimationPhase: number,
 	MaxHP: number,
 	CurrentHP: number,
+	SpawnWave: number,
+	ZombieDamage: number,
 	Lifecycle: string,
 }
 
@@ -87,7 +88,7 @@ local function createMotor(
 	return motor
 end
 
-local function createZombieModel(index: number): (Model, Humanoid, BasePart, JointSet)
+local function createZombieModel(index: number, maxHP: number): (Model, Humanoid, BasePart, JointSet)
 	local model = Instance.new("Model")
 	model.Name = string.format("Zombie%03d", index)
 
@@ -115,8 +116,8 @@ local function createZombieModel(index: number): (Model, Humanoid, BasePart, Joi
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.Name = "Humanoid"
-	humanoid.MaxHealth = 1
-	humanoid.Health = 1
+	humanoid.MaxHealth = maxHP
+	humanoid.Health = maxHP
 	humanoid.WalkSpeed = HordeConfig.ZombieWalkSpeed
 	humanoid.AutoRotate = true
 	humanoid.BreakJointsOnDeath = false
@@ -247,23 +248,24 @@ function ZombieService.Start()
 	task.spawn(updateLoop)
 end
 
-function ZombieService.Spawn(): Model?
-	if not running or not container or registry:Count() >= HordeConfig.ActiveZombieCap then
+function ZombieService.Spawn(spawnWave: number): Model?
+	if not running or not container or not HordeConfig.CanSpawn(registry:Count()) then
 		return nil
 	end
-	local maxHP = DamageConfig.DefaultZombieHP
+	local maxHP = HordeConfig.GetZombieHP(spawnWave)
+	local zombieDamage = HordeConfig.GetZombieDamage(spawnWave)
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
-	local model, humanoid, root, joints = createZombieModel(spawnCursor)
+	local model, humanoid, root, joints = createZombieModel(spawnCursor, maxHP)
 	model:SetAttribute("ZombieState", "ACTIVE")
+	model:SetAttribute("SpawnWave", spawnWave)
+	model:SetAttribute("ZombieDamage", zombieDamage)
 	model:SetAttribute("MaxHP", maxHP)
 	model:SetAttribute("CurrentHP", maxHP)
-	humanoid.MaxHealth = maxHP
-	humanoid.Health = maxHP
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
-	local approachSlot = (spawnCursor - 1) % HordeConfig.ActiveZombieCap
+	local approachSlot = (spawnCursor - 1) % HordeConfig.MaxAliveZombies
 	local approachRing = math.floor(approachSlot / APPROACH_SLOTS_PER_RING)
 	local ringSlot = approachSlot % APPROACH_SLOTS_PER_RING
 	local angle = (ringSlot + approachRing * 0.5) / APPROACH_SLOTS_PER_RING * math.pi * 2
@@ -278,6 +280,8 @@ function ZombieService.Spawn(): Model?
 		AnimationPhase = spawnCursor * 0.7,
 		MaxHP = maxHP,
 		CurrentHP = maxHP,
+		SpawnWave = spawnWave,
+		ZombieDamage = zombieDamage,
 		Lifecycle = "ACTIVE",
 	})
 	return model
@@ -290,6 +294,15 @@ end
 
 function ZombieService.GetActiveCount(): number
 	return registry:Count()
+end
+
+function ZombieService.GetActiveCountForWave(wave: number): number
+	return registry:CountForWave(wave)
+end
+
+function ZombieService.GetSpawnWave(model: Model): number?
+	local entry = registry:Get(model)
+	return if entry then entry.SpawnWave else nil
 end
 
 function ZombieService.IsActive(model: Model): boolean

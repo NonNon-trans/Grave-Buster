@@ -60,14 +60,19 @@ function ProgressionService.ResolveFinalAttackDamage(player: Player, baseDamage:
 	return ProgressionRules.FinalAttackDamage(baseDamage, ProgressionService.GetLevel(player))
 end
 
-function ProgressionService.AwardZombieDefeats(player: Player, defeatCount: number)
-	if player.Parent ~= Players or defeatCount <= 0 then
+function ProgressionService.AwardZombieDefeats(player: Player, defeatsByWave: { [number]: number })
+	if player.Parent ~= Players then
 		return nil
 	end
-	local waveValue = ReplicatedStorage:FindFirstChild("WaveNumber")
-	local wave = if waveValue and waveValue:IsA("IntValue") then waveValue.Value else 1
+	local totalDefeats = 0
+	for _, count in defeatsByWave do
+		totalDefeats += count
+	end
+	if totalDefeats <= 0 then
+		return nil
+	end
 	local state = store:GetOrCreate(player)
-	local result = ProgressionRules.AwardZombieDefeats(state, wave, defeatCount)
+	local result = ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)
 	applySnapshot(player, state)
 	stateChangedRemote:FireClient(player, {
 		Level = result.Level,

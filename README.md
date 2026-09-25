@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-022 — Player Level & XP**
+現在Phase: **GB-023 — Wave Power Scaling**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -42,6 +42,7 @@ Grave-Buster/
 │   │   ├── ShopSessionStore.lua
 │   │   ├── ZombieRules.lua
 │   │   ├── ZombieService.lua
+│   │   ├── WaveRules.lua
 │   │   ├── WaveService.lua
 │   │   └── Bootstrap.server.lua
 │   ├── client/
@@ -73,6 +74,8 @@ Grave-Buster/
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
 │   ├── KillCounter.spec.luau
+│   ├── ProgressionRules.spec.luau
+│   ├── ProgressionSessionStore.spec.luau
 │   ├── ShopConfig.spec.luau
 │   ├── ShopPresentation.spec.luau
 │   ├── ShopRules.spec.luau
@@ -265,7 +268,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 ## Player Level & XP（GB-022）
 
 - `ProgressionService`がPlayerごとのLevel / current-level XPをServer session内で保持します。初期値はLevel 1 / XP 0。Character Reset / Respawnでは維持され、Leave時に破棄します。DataStore、Coins、Shop価格、Wave scaling、Player damage、Death run resetは含みません。
-- XPはZombieをlethal defeatして既存ZombieService.Releaseに成功した時だけ付与します。報酬はServerの`WaveNumber`に基づき、`5 + floor(Wave / 2)` XPをdefeatごとに加算します。Non-lethal hitや二重Releaseでは報酬がありません。
+- XPはZombieをlethal defeatして既存ZombieService.Releaseに成功した時だけ付与します。報酬はServerが保持するZombie `SpawnWave`に基づき、`5 + floor(Wave / 2)` XPをdefeatごとに加算します。Non-lethal hitや二重Releaseでは報酬がありません。
 - 次Levelに必要なXPは`100 + (Level - 1) × 50`。overflowを保持し、1回の複数defeat報酬でも必要なだけLevel Upを繰り返します。Level multiplierは`1 + 0.05 × (Level - 1)`で、ServerのCombatServiceがWeapon BaseDamageへ`math.round`相当を適用してDamageRulesへ渡します。Overkill Damage Numberは引き続きServer解決済みFinal AttackDamageを表示します。
 - `ProgressionHud`は右上SHOP buttonの下にLevel、XP bar、数値を表示し、Server snapshot更新時に反映します。Level Upは短い集約表示で旧→新Levelとdamage増加を示し、Combatをpauseしません。
 - `ProgressionRules.spec.luau`はXP threshold、overflow、複数Level Up、Wave報酬、lethal報酬の重複防止、次attack damage更新、Overkillを検証します。`ProgressionSessionStore.spec.luau`はCharacter lifecycleをまたぐ保持とLeave / Rejoin初期化を確認します。
@@ -280,6 +283,24 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 6. Shop、Owned / Equipped、Weapon Slider、Kills、Wave、HP bar、Knockback / cleanup、Player MaxHP 100が維持されることを確認します。PCとMobile Landscape双方でHUD衝突・clippingとRuntime Errorを確認します。
 
 Human Gate未実施のため、Static validationは視覚・操作確認の代替ではありません。
+
+## Wave Power Scaling（GB-023）
+
+- `HordeConfig`がWave 1–10のZombie HP / Damage / spawn quota表とWave 11+の式をsingle sourceとして持ちます。HPはroundして整数化します。MaxAliveは80、既存spawn pacingは0.65秒、Intermissionは0秒です。
+- `ZombieService.Spawn(wave)`はspawn時点のWave HPをModel attribute、Humanoid MaxHealth / Health、Server registryへ固定し、immutableな`SpawnWave`も記録します。ZombieDamageはconfigから解決できますが、Player Damage loopには接続しません。
+- `WaveRules`と`WaveService`は成功したspawnだけquotaへ加算します。80体cap中はquotaを保持して0.2秒間隔で空きを確認し、空いたslotからspawnを再開します。Wave clearはquotaを全てspawnし、当該Wave所属のACTIVE Zombieが0になった場合だけ一度発火します。
+- Clear eventはWave HUD内に`WAVE N CLEAR!`を1.35秒表示します。次Waveはclear発火後すぐ始まり、表示やIntermissionでGameplayを止めません。XPは撃破個体のSpawnWaveごとに集約・計算するため、Wave境界のraceで報酬が変わりません。
+- `HordeConfig.spec.luau`と`HordeSimulation.spec.luau`は固定/拡張balance、整数HP、cap、quota保持、slot再利用、clear条件と一回性を確認します。既存のDamage、Progression、Shop、Combat、Horde specsも併せて実行します。
+
+## Human Studio Check（GB-023）
+
+1. `build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx`をStudioで開き、Playします。Wave 1のZombieはHP10、Wave 2はHP12でspawnし、WaveごとのBaseDamage + Player Level補正でBat / Panのlethal結果が期待通りか確認します。
+2. Wave clearを完了し、`WAVE N CLEAR!`表示が一度だけ出ること、表示中も次Waveが始まってZombieがspawnすること、旧2.5秒の待ちがないことを確認します。
+3. Wave 1 quotaの最後のZombieが残る間はclearしないこと、quota完了後も当該WaveのACTIVE Zombieが残っていればclearしないことを確認します。
+4. High-wave/cap項目はspecで検証済みですがStudioでも確認する場合、Wave 20のquota 110に対してAlive上限80を守り、撃破で空いたslotへ残りquotaが供給されることをServer Explorerで確認します。
+5. XP HUD / Level Up、SpawnWave由来XP、KILLS、Shop、Switcher、Combat、Knockback / cleanup、Player HP 100を再確認し、PC / Mobile LandscapeでRuntime Errorや明確な表示破綻がないことを確認します。
+
+Human Gate未実施のため、このチェックが完了するまでGB-023は未確定です。
 
 Static test:
 
@@ -300,6 +321,7 @@ build/luau-tools/luau tests/FeedbackConfig.spec.luau
 build/luau-tools/luau tests/KillCounter.spec.luau
 build/luau-tools/luau tests/ProgressionRules.spec.luau
 build/luau-tools/luau tests/ProgressionSessionStore.spec.luau
+python3 tests/validate_client_mapping.py build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 

@@ -74,4 +74,17 @@ function ProgressionRules.AwardZombieDefeats(state: State, wave: number, defeatC
 	return ProgressionRules.AwardXP(state, ProgressionRules.ZombieXPReward(wave) * defeatCount)
 end
 
+function ProgressionRules.AwardZombieDefeatsByWave(
+	state: State,
+	defeatsByWave: { [number]: number }
+): AwardResult
+	local totalXP = 0
+	for wave, defeatCount in defeatsByWave do
+		assert(type(wave) == "number" and wave >= 1 and wave % 1 == 0)
+		assert(type(defeatCount) == "number" and defeatCount >= 0 and defeatCount % 1 == 0)
+		totalXP += ProgressionRules.ZombieXPReward(wave) * defeatCount
+	end
+	return ProgressionRules.AwardXP(state, totalXP)
+end
+
 return ProgressionRules

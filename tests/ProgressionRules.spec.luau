@@ -70,6 +70,13 @@ local multiTargetProgression = ProgressionRules.NewState()
 local multiTargetReward = ProgressionRules.AwardZombieDefeats(multiTargetProgression, 4, 3)
 assert(multiTargetReward.XPGranted == 21 and multiTargetProgression.XP == 21)
 
+local waveOwnedRewards = ProgressionRules.NewState()
+local ownershipReward = ProgressionRules.AwardZombieDefeatsByWave(waveOwnedRewards, {
+	[1] = 1,
+	[2] = 2,
+})
+assert(ownershipReward.XPGranted == 17, "XP uses each defeated Zombie's immutable spawn wave")
+
 local nextAttackState = { Level = 1, XP = 95 }
 assert(ProgressionRules.FinalAttackDamage(10, nextAttackState.Level) == 10)
 ProgressionRules.AwardZombieDefeats(nextAttackState, 1, 1)
@@ -87,4 +94,4 @@ local overkill = DamageRules.Apply(
 assert(overkill and overkill.Lethal and overkill.AfterHP == 0)
 assert(overkill.AttackDamage == 30 and overkill.ActualHPLoss == 10)
 
-print("PASS ProgressionRules: XP thresholds/overflow/rewards, level damage, lethal gating, and overkill")
+print("PASS ProgressionRules: XP thresholds/overflow/rewards, wave-owned rewards, level damage, lethal gating, and overkill")
