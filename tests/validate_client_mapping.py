@@ -154,6 +154,8 @@ def validate(place_path: str) -> None:
         'script.Parent:WaitForChild("OwnedWeaponSource")',
         'script.Parent:WaitForChild("ShopPresentation")',
         'WaitForChild("PurchaseRequest")',
+        'WaitForChild("ProgressionRemotes")',
+        "OwnedWeaponSource.ApplyAuthoritativeCoins(snapshot.Coins)",
         "OwnedWeaponSource.ApplyAuthoritativeState(state)",
         "combatController.SetShopOpen(isOpen)",
         "purchaseRemote:InvokeServer(weaponId)",
@@ -227,15 +229,18 @@ def validate(place_path: str) -> None:
         "require(script.Parent.ShopService)",
         "require(script.Parent.PlayerHealthService)",
         "PlayerHealthService.Start()",
-        "ShopService.Start()",
+        "ShopService.Start(ProgressionService)",
         "ProgressionService.Start()",
         "CombatService.Start(ZombieService, ShopService, ProgressionService)",
-        "WaveService.Start(ZombieService)",
+        "WaveService.Start(ZombieService, ProgressionService)",
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
     for fragment in (
-        "ShopRules.TryPurchase(session, weaponId, ShopConfig)",
+        "ShopRules.ValidatePurchase(",
+        "progressionService.GetCoins(player)",
+        "progressionService.TrySpendCoins(player, price)",
+        "ShopRules.GrantPurchase(session, weaponId)",
         "store:Remove(player)",
         "purchaseLocks[player]",
     ):
@@ -274,7 +279,11 @@ def validate(place_path: str) -> None:
         'player:SetAttribute("PlayerLevel", state.Level)',
         'player:SetAttribute("CurrentXP", state.XP)',
         'player:SetAttribute("RequiredXP"',
+        'player:SetAttribute("Coins", state.Coins)',
         "ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)",
+        "function ProgressionService.GetCoins(player: Player): number",
+        "function ProgressionService.TrySpendCoins(player: Player, amount: number): boolean",
+        "function ProgressionService.AwardWaveClearBonus(wave: number): number",
         "stateChangedRemote:FireClient(player",
         "store:Remove(player)",
     ):
@@ -302,6 +311,7 @@ def validate(place_path: str) -> None:
         "zombieService.Spawn(currentWave)",
         "task.wait(HordeConfig.CapPollInterval)",
         "WaveRules.TryMarkCleared(state, zombieService.GetActiveCountForWave(currentWave))",
+        "progressionService.AwardWaveClearBonus(currentWave)",
         "clearedRemote:FireAllClients(currentWave)",
         "if HordeConfig.Intermission > 0 then",
     ):
@@ -319,6 +329,14 @@ def validate(place_path: str) -> None:
         "BASE_ZOMBIE_XP + math.floor(safeWave / XP_WAVE_DIVISOR)",
     ):
         assert fragment in progression_rules_source, f"ProgressionRules contract missing: {fragment}"
+    shop_config_source = source_of(direct_child(shared, "ShopConfig", "ModuleScript"))
+    for fragment in (
+        "FRYING_PAN = 80",
+        "GIANT_HAMMER = 220",
+        "BLOWER = 500",
+        "THUNDER_ROD = 900",
+    ):
+        assert fragment in shop_config_source, f"GB-024 shop price source missing: {fragment}"
     progression_hud_source = source_of(modules["ProgressionHud"])
     for fragment in (
         'gui.Name = GUI_NAME',

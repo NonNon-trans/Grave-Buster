@@ -46,6 +46,24 @@ local function applySnapshot(player: Player, state: ProgressionRules.State)
 	player:SetAttribute("PlayerLevel", state.Level)
 	player:SetAttribute("CurrentXP", state.XP)
 	player:SetAttribute("RequiredXP", ProgressionRules.RequiredXP(state.Level))
+	player:SetAttribute("Coins", state.Coins)
+end
+
+local function publishSnapshot(player: Player, extra)
+	local state = store:GetOrCreate(player)
+	applySnapshot(player, state)
+	local snapshot = {
+		Level = state.Level,
+		CurrentXP = state.XP,
+		RequiredXP = ProgressionRules.RequiredXP(state.Level),
+		Coins = state.Coins,
+	}
+	if extra then
+		for key, value in extra do
+			snapshot[key] = value
+		end
+	end
+	stateChangedRemote:FireClient(player, snapshot)
 end
 
 local function initializePlayer(player: Player)
@@ -54,6 +72,28 @@ end
 
 function ProgressionService.GetLevel(player: Player): number
 	return store:GetOrCreate(player).Level
+end
+
+function ProgressionService.GetCoins(player: Player): number
+	return store:GetOrCreate(player).Coins
+end
+
+function ProgressionService.TrySpendCoins(player: Player, amount: number): boolean
+	if player.Parent ~= Players then
+		return false
+	end
+	local state = store:GetOrCreate(player)
+	if not ProgressionRules.TrySpendCoins(state, amount) then
+		return false
+	end
+	applySnapshot(player, state)
+	return true
+end
+
+function ProgressionService.PublishState(player: Player)
+	if player.Parent == Players then
+		publishSnapshot(player)
+	end
 end
 
 function ProgressionService.ResolveFinalAttackDamage(player: Player, baseDamage: number): number
@@ -73,17 +113,27 @@ function ProgressionService.AwardZombieDefeats(player: Player, defeatsByWave: { 
 	end
 	local state = store:GetOrCreate(player)
 	local result = ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)
-	applySnapshot(player, state)
-	stateChangedRemote:FireClient(player, {
-		Level = result.Level,
+	publishSnapshot(player, {
 		CurrentXP = result.XP,
-		RequiredXP = result.RequiredXP,
 		XPGranted = result.XPGranted,
+		CoinsGranted = result.CoinsGranted,
 		LevelsGained = result.LevelsGained,
 		OldLevel = result.OldLevel,
 		DamageIncreasePercent = result.DamageIncreasePercent,
 	})
 	return result
+end
+
+function ProgressionService.AwardWaveClearBonus(wave: number): number
+	local amount = ProgressionRules.WaveClearBonus(wave)
+	for _, player in Players:GetPlayers() do
+		if store:ClaimWaveBonus(player, wave) then
+			local state = store:GetOrCreate(player)
+			ProgressionRules.AwardWaveClearBonus(state, wave)
+			publishSnapshot(player, { WaveClearBonus = amount, ClearedWave = wave })
+		end
+	end
+	return amount
 end
 
 function ProgressionService.Start()
