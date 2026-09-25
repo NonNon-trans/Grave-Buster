@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-023 — Wave Power Scaling**
+現在Phase: **GB-024 — Coins & Shop Economy**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -92,7 +92,7 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop state / purchase validation、Level / XP |
+| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop ownership / purchase validation、Level / XP / Coins |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
 | `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
@@ -228,10 +228,10 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 ## Online Weapon Shop仕様（GB-005）
 
-- Economy: Join時2000 Coins。BASEBALL BATだけをDefault Owned / Equippedとし、Character Resetでは維持、Leaveで破棄、Rejoinで初期化します。DataStore、Kill Reward、Monetizationはありません。
-- Prices: Baseball Bat 0、Frying Pan 200、Giant Hammer 400、Blower 600、Thunder Rod 1000 Coins。`ShopConfig`が正式Order、Price、Default Ownedを一元管理します。
-- Server authority: `ShopService`がPlayerごとのSession state、revision、purchase lockを所有します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、残高、request shapeを検証します。同一callback内にyieldを挟まずCurrency更新とownership grantを完結します。
-- State sync: `GetState`でCurrency / Owned Weapons / Equipped Weapon / Revisionを取得し、購入成功時は`StateChanged`とPurchase responseでsnapshotを返します。Clientは新しいrevisionだけを`OwnedWeaponSource`へ適用します。
+- GB-005当時のEconomy baseline: Join時2000 test Coins。これはGB-024で廃止され、現行仕様は0 Coins開始です。
+- GB-005当時のPrices: Pan 200、Hammer 400、Blower 600、Thunder Rod 1000 Coins。GB-024で正式価格へ更新しました。
+- Server authority: `ShopService`はOwned Weapons / revision / purchase lockを所有し、Coinsは`ProgressionService`がLevel / XPと同じsession stateで管理します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、Coins、request shapeを検証します。
+- State sync: `GetState`はProgressionServiceのCoinsとShopServiceのOwned Weapons / Equipped Weapon / Revisionを合成して返します。購入成功時はShop snapshotとProgression snapshotからClient表示を更新します。
 - SHOP button: `CoreUISafeInsets`内の右上、112×46 px。Shop Panelは中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
 - Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
 - Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
@@ -244,7 +244,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Hit / knockback feedback: Serverで実際にZombieをReleaseできたattackだけを`CombatFeedback`で攻撃Playerへ通知し、Defeated rootへ0.22秒だけ短いTrailをlocal生成します。Human Gate結果によりNeon hit flashは削除済みです。
 - Weapon identity: TrailをWeapon別に暖色 / 金属色 / Orange / Cyan / Violetへ軽微に色分けします。既存のKnockback force、hitbox、interval、physics lifetimeは変更しません。
 - Bounded effects: 1 attackの表示は最大8 Zombie分。TrailとAttachmentはDebrisで必ずcleanupし、Part、ParticleEmitter、Heartbeat、Zombie別connectionは使用しません。
-- Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。左上Safe Areaの116×36 px `KILLS N`表示へ反映し、Character Resetでは維持、Leave / Rejoinでは0へ戻ります。Currency / Rewardとは接続しません。
+- Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。GB-024からEconomy報酬はProgressionServiceのlethal kill rewardへ接続します。
 - Wave emphasis: 既存132×32 px表示を維持し、Wave更新時だけ0.55秒間1.16倍・背景を明瞭化し、0.35秒で通常表示へ戻します。巨大Bannerは追加しません。
 - Camera / Audio: Mobile camera操作と連続attackの安定性を優先してCamera shakeは追加しません。信頼できるAsset IDを新規導入しないためAudioも追加しません。
 
@@ -291,6 +291,16 @@ Human Gate未実施のため、Static validationは視覚・操作確認の代�
 - `WaveRules`と`WaveService`は成功したspawnだけquotaへ加算します。80体cap中はquotaを保持して0.2秒間隔で空きを確認し、空いたslotからspawnを再開します。Wave clearはquotaを全てspawnし、当該Wave所属のACTIVE Zombieが0になった場合だけ一度発火します。
 - Clear eventはWave HUD内に`WAVE N CLEAR!`を1.35秒表示します。次Waveはclear発火後すぐ始まり、表示やIntermissionでGameplayを止めません。XPは撃破個体のSpawnWaveごとに集約・計算するため、Wave境界のraceで報酬が変わりません。
 - `HordeConfig.spec.luau`と`HordeSimulation.spec.luau`は固定/拡張balance、整数HP、cap、quota保持、slot再利用、clear条件と一回性を確認します。既存のDamage、Progression、Shop、Combat、Horde specsも併せて実行します。
+
+## Coins & Shop Economy（GB-024）
+
+- Coinsは`ProgressionService`のPlayer session stateがLevel / XPとともに所有します。開始時0、Character Reset / Respawnでは維持、Leaveで破棄し、DataStoreはありません。ShopServiceは残高を保持せず、Shop snapshotではProgressionServiceから読みます。
+- Zombieをlethalにし、`ZombieService.Release`に成功した同一kill resultから、SpawnWave別にXP `5 + floor(Wave / 2)` とCoins `1 + floor(Wave / 3)`を一括付与します。non-lethal hit / Release失敗 / DEFEATED再処理ではどちらも増えません。
+- Wave bonusはGB-023のquota完了かつ当該Wave ACTIVE数0のclear判定後に`Wave × 10`を一度付与します。WaveRulesの一回clearとPlayer session claim ledgerで重複を防ぎ、clear通知・次Wave開始は止めません。
+- `ShopConfig`が正式価格を一元管理します: Batは初期Owned、Pan 80、Hammer 220、Blower 500、Thunder Rod 900 Coins。PurchaseはServerで検証し、ProgressionServiceがCoinsを減算した後、ShopServiceがOwnedを付与します。購入のみで自動Equipしません。
+- 既存Shopの固定Header `COINS: N`はServer snapshotとProgression state eventから更新され、購入 / kill / wave bonusを反映します。OwnedWeaponSourceはServer-confirmed Owned listをSwitcherへ即通知します。
+- Balance sanity: Wave 1の15 kill + clearで25 Coins、Wave 2で累計65 Coins、Wave 3 killは各2 Coins。80 CoinsでPanを購入できます。
+- Human Gate / static testsはHuman runtime感触の代わりではありません。
 
 ## Human Studio Check（GB-023）
 
@@ -416,3 +426,16 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 6. Wave切替時だけ既存表示が短く1.16倍になり、その後通常サイズへ戻ることを確認します。Gameplayを遮るBannerがないことも確認します。
 7. Shop、Currency、Ownership、Switcher、Combat、Horde、EnvironmentがGB-005以前と同じ動作を維持していることを確認します。
 8. 28 Active Zombieと複数のDefeated bodyがある状態で連続attackし、Mobile frame rateに明確な悪化がなく、OutputにRuntime Errorがないことを確認します。
+
+## Human Studio / Published Mobile Check（GB-024）
+
+1. `build/Grave-Buster-v0.2-GB024-economy.rbxlx`をStudioで開き、Playします。Join直後 Shop Header が`COINS: 0`、SwitcherがBASEBALL BATのみ、BatがEQUIPPEDであることを確認します。
+2. Wave 1のZombieを倒すごとにCoinsが1増え、15体とWave clear bonusの合計で25 Coinsになることを確認します。Wave Clear表示中も次Waveが即開始することを確認します。
+3. Wave 2をclear後に累計65 Coins、Wave 3 killごとに2 Coins増え、80到達でFrying Panが購入可能になることを確認します。
+4. Panを購入し、残高が80減ること、OWNEDになること、Switcherへ即追加されること、購入だけでは装備が変わらないことを確認します。ShopまたはSwitcherからEquipしてCombatを続けます。
+5. Insufficient Coins、二重tap、Owned再購入、未知Weapon requestの拒否と残高不変を確認します。
+6. Character Reset後もCoins / Owned / Equipped / Level / XPが維持され、ExperienceをLeave / RejoinするとCoins 0、BatのみOwned、Level 1 / XP 0へ戻ることを確認します。
+7. Shopの固定Coins Headerがkill / clear bonus / purchase後に更新されること、Mobile LandscapeでShop / Combat / Switcher / HUDと衝突しないことを確認します。
+8. GB-023 Wave clear条件、SpawnWave、Wave scaling、KILLS、XP / Level up、HP / Damage、Combat / Knockback、PC / Mobile、Environmentを回帰確認し、OutputにRuntime Errorがないことを確認します。
+
+Published Mobile Human GateはこのArtifactをTEST ExperienceへPublishし、LandscapeのPhysical Mobile Deviceで実施してください。

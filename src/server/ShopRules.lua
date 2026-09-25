@@ -8,13 +8,12 @@ function ShopRules.NewSession(shopConfig)
 		owned[weaponId] = true
 	end
 	return {
-		Currency = shopConfig.StartCurrency,
 		Owned = owned,
 		Revision = 0,
 	}
 end
 
-function ShopRules.TryPurchase(session, weaponId: unknown, shopConfig)
+function ShopRules.ValidatePurchase(session, coins: number, weaponId: unknown, shopConfig)
 	if type(weaponId) ~= "string" then
 		return false, "INVALID_WEAPON"
 	end
@@ -25,15 +24,17 @@ function ShopRules.TryPurchase(session, weaponId: unknown, shopConfig)
 	if session.Owned[weaponId] then
 		return false, "ALREADY_OWNED"
 	end
-	if session.Currency < price then
+	if coins < price then
 		return false, "NOT_ENOUGH_COINS"
 	end
+	return true, "PURCHASED", price
+end
 
-	local newCurrency = session.Currency - price
+function ShopRules.GrantPurchase(session, weaponId: string)
+	assert(not session.Owned[weaponId], "Weapon must not already be owned")
 	session.Owned[weaponId] = true
-	session.Currency = newCurrency
 	session.Revision += 1
-	return true, "PURCHASED"
+	return true
 end
 
 function ShopRules.GetOwnedWeapons(session, displayOrder)

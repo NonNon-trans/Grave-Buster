@@ -19,6 +19,15 @@ function OwnedWeaponSource.GetCurrency(): number
 	return currency
 end
 
+function OwnedWeaponSource.ApplyAuthoritativeCoins(coins: number): boolean
+	if type(coins) ~= "number" or coins < 0 or coins % 1 ~= 0 then
+		return false
+	end
+	currency = coins
+	changed:Fire()
+	return true
+end
+
 function OwnedWeaponSource.ApplyAuthoritativeState(state): boolean
 	if type(state) ~= "table"
 		or type(state.Currency) ~= "number"

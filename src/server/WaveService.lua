@@ -13,6 +13,7 @@ local WAVE_CLEARED_REMOTE = "WaveCleared"
 local running = false
 local currentWave = 0
 local waveClearedRemote: RemoteEvent? = nil
+local progressionService = nil
 
 type ZombieServiceApi = {
 	HasValidTarget: () -> boolean,
@@ -99,6 +100,7 @@ local function runWaves(zombieService: ZombieServiceApi, waveValue: IntValue)
 
 		while running do
 			if WaveRules.TryMarkCleared(state, zombieService.GetActiveCountForWave(currentWave)) then
+				progressionService.AwardWaveClearBonus(currentWave)
 				local clearedRemote = assert(waveClearedRemote, "Wave clear RemoteEvent is not initialized")
 				clearedRemote:FireAllClients(currentWave)
 				break
@@ -112,11 +114,12 @@ local function runWaves(zombieService: ZombieServiceApi, waveValue: IntValue)
 	end
 end
 
-function WaveService.Start(zombieService: ZombieServiceApi)
+function WaveService.Start(zombieService: ZombieServiceApi, playerProgressionService)
 	if running then
 		return
 	end
 	running = true
+	progressionService = assert(playerProgressionService, "ProgressionService is required")
 	currentWave = 0
 	waveClearedRemote = ensureWaveClearedRemote()
 	local waveValue = ensureWaveValue()

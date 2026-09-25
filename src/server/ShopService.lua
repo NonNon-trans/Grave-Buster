@@ -20,6 +20,7 @@ local store = ShopSessionStore.new(function()
 end)
 local purchaseLocks = {}
 local stateChangedRemote = nil
+local progressionService = nil
 
 local function ensureRemote(folder, className, name)
 	local existing = folder:FindFirstChild(name)
@@ -62,7 +63,7 @@ end
 function ShopService.GetSnapshot(player)
 	local session = store:GetOrCreate(player)
 	return {
-		Currency = session.Currency,
+		Currency = progressionService.GetCoins(player),
 		OwnedWeapons = ShopRules.GetOwnedWeapons(session, ShopConfig.Order),
 		EquippedWeapon = player:GetAttribute("EquippedWeapon"),
 		Revision = session.Revision,
@@ -87,20 +88,33 @@ local function purchase(player, weaponId, ...)
 
 	purchaseLocks[player] = true
 	local session = store:GetOrCreate(player)
-	local success, reason = ShopRules.TryPurchase(session, weaponId, ShopConfig)
+	local success, reason, price = ShopRules.ValidatePurchase(
+		session,
+		progressionService.GetCoins(player),
+		weaponId,
+		ShopConfig
+	)
+	if success and price and progressionService.TrySpendCoins(player, price) then
+		ShopRules.GrantPurchase(session, weaponId)
+	else
+		success = false
+		reason = if reason == "PURCHASED" then "NOT_ENOUGH_COINS" else reason
+	end
 	local snapshot = ShopService.GetSnapshot(player)
 	purchaseLocks[player] = nil
 	if success then
+		progressionService.PublishState(player)
 		stateChangedRemote:FireClient(player, snapshot)
 	end
 	return { Success = success, Reason = reason, State = snapshot }
 end
 
-function ShopService.Start()
+function ShopService.Start(playerProgressionService)
 	if started then
 		return
 	end
 	started = true
+	progressionService = assert(playerProgressionService, "ProgressionService is required")
 	ShopConfig.Validate(WeaponConfig.Order)
 	local getStateRemote, purchaseRemote, changedRemote = ensureRemotes()
 	stateChangedRemote = changedRemote
