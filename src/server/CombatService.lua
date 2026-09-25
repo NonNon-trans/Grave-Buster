@@ -24,6 +24,7 @@ local KILL_ATTRIBUTE = "SessionKills"
 local started = false
 local zombieService = nil
 local shopService = nil
+local progressionService = nil
 local lastAttackAt = {}
 local killCounter = KillCounter.new()
 local feedbackRemote = nil
@@ -268,6 +269,7 @@ local function performAttack(player: Player)
 		return
 	end
 	lastAttackAt[player] = now
+	local attackDamage = progressionService.ResolveFinalAttackDamage(player, config.BaseDamage)
 
 	local targets = queryTargets(root, config)
 	local feedbackRoots = {}
@@ -276,7 +278,7 @@ local function performAttack(player: Player)
 	local defeatCount = 0
 	for index = 1, math.min(#targets, config.MaxTargets) do
 		local model = targets[index]
-		local result = zombieService.ApplyDamage(model, config.BaseDamage)
+		local result = zombieService.ApplyDamage(model, attackDamage)
 		if result then
 			table.insert(damageResults, {
 				Model = model,
@@ -302,17 +304,19 @@ local function performAttack(player: Player)
 	if defeatCount > 0 then
 		local kills = killCounter:Add(player, defeatCount)
 		player:SetAttribute(KILL_ATTRIBUTE, kills)
+		progressionService.AwardZombieDefeats(player, defeatCount)
 		feedbackRemote:FireClient(player, weaponName, feedbackRoots)
 	end
 end
 
-function CombatService.Start(service, ownershipService)
+function CombatService.Start(service, ownershipService, playerProgressionService)
 	if started then
 		return
 	end
 	started = true
 	zombieService = service
 	shopService = ownershipService
+	progressionService = playerProgressionService
 	WeaponConfig.Validate()
 	FeedbackConfig.Validate()
 

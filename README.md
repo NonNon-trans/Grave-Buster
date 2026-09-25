@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-021 — Damage / HP Foundation**
+現在Phase: **GB-022 — Player Level & XP**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -11,7 +11,7 @@ Thunder Battleとは独立した新規Projectです。
 GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
 5種類のWeaponはRange・Hit shape・Knockbackで差別化し、ZombieはPlayerへ接近しますが攻撃しません。
-Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownershipはServer Authorityです。CurrencyとownershipはSession-onlyで、DataStoreは未実装です。
+Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownership、Player Level / XPはServer Authorityです。Level / XP、Currency、ownershipはSession-onlyで、DataStoreは未実装です。
 
 ## Platform direction
 
@@ -34,6 +34,9 @@ Grave-Buster/
 │   │   ├── DamageRules.lua
 │   │   ├── KillCounter.lua
 │   │   ├── PlayerHealthService.lua
+│   │   ├── ProgressionRules.lua
+│   │   ├── ProgressionService.lua
+│   │   ├── ProgressionSessionStore.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
 │   │   ├── ShopSessionStore.lua
@@ -48,6 +51,7 @@ Grave-Buster/
 │   │   ├── OwnedWeaponSource.lua
 │   │   ├── ShopController.lua
 │   │   ├── ShopPresentation.lua
+│   │   ├── ProgressionHud.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
@@ -85,9 +89,9 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop state / purchase validation |
+| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop state / purchase validation、Level / XP |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop UI、Wave HUD |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -258,6 +262,25 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - `PlayerHealthService`はCharacter spawn / respawn時にHumanoid MaxHealthとHealthを100へ設定し、Playerの`MaxHP` attributeも100にします。Zombie attack、Player Damage、Level / XP / Coins reward、Wave scaling、Death run reset、persistenceはGB-021に含めません。
 - `DamageRules.spec.luau`はHP10 + Bat、HP15 + Batのnon-lethalと次撃lethal、HP15 + Pan、二重lethal拒否、複数個体の独立HP、Player MaxHP契約を検証します。Static validationはStudio / Published Human Gateの代替ではありません。
 
+## Player Level & XP（GB-022）
+
+- `ProgressionService`がPlayerごとのLevel / current-level XPをServer session内で保持します。初期値はLevel 1 / XP 0。Character Reset / Respawnでは維持され、Leave時に破棄します。DataStore、Coins、Shop価格、Wave scaling、Player damage、Death run resetは含みません。
+- XPはZombieをlethal defeatして既存ZombieService.Releaseに成功した時だけ付与します。報酬はServerの`WaveNumber`に基づき、`5 + floor(Wave / 2)` XPをdefeatごとに加算します。Non-lethal hitや二重Releaseでは報酬がありません。
+- 次Levelに必要なXPは`100 + (Level - 1) × 50`。overflowを保持し、1回の複数defeat報酬でも必要なだけLevel Upを繰り返します。Level multiplierは`1 + 0.05 × (Level - 1)`で、ServerのCombatServiceがWeapon BaseDamageへ`math.round`相当を適用してDamageRulesへ渡します。Overkill Damage Numberは引き続きServer解決済みFinal AttackDamageを表示します。
+- `ProgressionHud`は右上SHOP buttonの下にLevel、XP bar、数値を表示し、Server snapshot更新時に反映します。Level Upは短い集約表示で旧→新Levelとdamage増加を示し、Combatをpauseしません。
+- `ProgressionRules.spec.luau`はXP threshold、overflow、複数Level Up、Wave報酬、lethal報酬の重複防止、次attack damage更新、Overkillを検証します。`ProgressionSessionStore.spec.luau`はCharacter lifecycleをまたぐ保持とLeave / Rejoin初期化を確認します。
+
+## Human Studio Check（GB-022）
+
+1. `build/Grave-Buster-v0.2-GB022-player-progression.rbxlx`をStudioで開き、Playします。最初にLEVEL 1、0 / 100 XPが表示されることを確認します。
+2. Wave 1のZombieを倒し、Kill count増加と同時にXPが5増えること、XP barと数値が更新されることを確認します。Non-lethal hitはXPを与えません。
+3. Wave 1の15体とWave 2の5体を倒し、合計105 XPでLevel 2 / 5 XPとLevel Up feedbackを確認します。必要XPに達した後もWave / attackは止まらないことを確認します。
+4. Level 1のBat Damage Number 10と、Level 2のBat Damage Number 11を比較します。Level 2のBatをHP 10 Zombieへ当てた場合、Damage Numberは11、AfterHPは0です。
+5. CharacterをResetし、Level / XPが保持され、HUDとDamageが一致することを確認します。Leave / Rejoinで初期化されるのはGB-022の想定です。
+6. Shop、Owned / Equipped、Weapon Slider、Kills、Wave、HP bar、Knockback / cleanup、Player MaxHP 100が維持されることを確認します。PCとMobile Landscape双方でHUD衝突・clippingとRuntime Errorを確認します。
+
+Human Gate未実施のため、Static validationは視覚・操作確認の代替ではありません。
+
 Static test:
 
 ```sh
@@ -275,6 +298,8 @@ build/luau-tools/luau tests/ShopRules.spec.luau
 build/luau-tools/luau tests/ShopSessionStore.spec.luau
 build/luau-tools/luau tests/FeedbackConfig.spec.luau
 build/luau-tools/luau tests/KillCounter.spec.luau
+build/luau-tools/luau tests/ProgressionRules.spec.luau
+build/luau-tools/luau tests/ProgressionSessionStore.spec.luau
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
