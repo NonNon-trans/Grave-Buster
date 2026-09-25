@@ -142,6 +142,11 @@ def validate(place_path: str) -> None:
         "FeedbackConfig.WaveEmphasisFade",
         "emphasisGeneration += 1",
         "activeTween:Cancel()",
+        'WaitForChild("WaveRemotes")',
+        'WaitForChild("WaveCleared")',
+        'string.format("WAVE %d CLEAR!", clearedWave)',
+        "FeedbackConfig.WaveClearLifetime",
+        "clearGeneration += 1",
     ):
         assert fragment in wave_hud_source, f"WaveHud feedback contract missing: {fragment}"
     shop_controller_source = source_of(modules["ShopController"])
@@ -180,11 +185,24 @@ def validate(place_path: str) -> None:
     shared = direct_child(replicated_storage, "Shared", "Folder")
     feedback_config = direct_child(shared, "FeedbackConfig", "ModuleScript")
     damage_config = direct_child(shared, "DamageConfig", "ModuleScript")
+    horde_config = direct_child(shared, "HordeConfig", "ModuleScript")
     assert "ImpactLifetime" not in source_of(feedback_config)
     damage_config_source = source_of(damage_config)
     assert "PlayerMaxHP = 100" in damage_config_source
-    assert "DefaultZombieHP = 10" in damage_config_source
     direct_child(shared, "ShopConfig", "ModuleScript")
+    horde_config_source = source_of(horde_config)
+    for fragment in (
+        "ZombieHP = 10, ZombieDamage = 10, TotalSpawn = 15",
+        "Intermission = 0",
+        "MaxAliveZombies = 80",
+        "function HordeConfig.GetZombieHP(wave: number)",
+        "math.round(50 * 1.10 ^ (wave - 10))",
+        "function HordeConfig.GetZombieDamage(wave: number)",
+        "15 + math.floor((wave - 10) / 3)",
+        "function HordeConfig.GetTotalSpawn(wave: number)",
+        "60 + (wave - 10) * 5",
+    ):
+        assert fragment in horde_config_source, f"Wave scaling contract missing: {fragment}"
 
     server_scripts = direct_child(root, "ServerScriptService", "ServerScriptService")
     all_zombie_services = [
@@ -196,9 +214,10 @@ def validate(place_path: str) -> None:
     )
     server_modules = {}
     for name in (
-        "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
+        "ActiveZombieRegistry", "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
         "ProgressionRules", "ProgressionService", "ProgressionSessionStore",
-        "ShopRules", "ShopService", "ShopSessionStore", "ZombieRules", "ZombieService",
+        "ShopRules", "ShopService", "ShopSessionStore", "WaveRules", "WaveService",
+        "ZombieRules", "ZombieService",
     ):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
@@ -211,6 +230,7 @@ def validate(place_path: str) -> None:
         "ShopService.Start()",
         "ProgressionService.Start()",
         "CombatService.Start(ZombieService, ShopService, ProgressionService)",
+        "WaveService.Start(ZombieService)",
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
@@ -232,7 +252,9 @@ def validate(place_path: str) -> None:
         "FeedbackConfig.GetEffectCount(config.MaxTargets)",
         "killCounter:Remove(player)",
         "progressionService.ResolveFinalAttackDamage(player, config.BaseDamage)",
-        "progressionService.AwardZombieDefeats(player, defeatCount)",
+        "progressionService.AwardZombieDefeats(player, defeatsByWave)",
+        "local spawnWave = zombieService.GetSpawnWave(model)",
+        "defeatsByWave[spawnWave] = (defeatsByWave[spawnWave] or 0) + 1",
     ):
         assert fragment in combat_service_source, f"CombatService feedback contract missing: {fragment}"
     for fragment in (
@@ -252,8 +274,7 @@ def validate(place_path: str) -> None:
         'player:SetAttribute("PlayerLevel", state.Level)',
         'player:SetAttribute("CurrentXP", state.XP)',
         'player:SetAttribute("RequiredXP"',
-        'ReplicatedStorage:FindFirstChild("WaveNumber")',
-        "ProgressionRules.AwardZombieDefeats(state, wave, defeatCount)",
+        "ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)",
         "stateChangedRemote:FireClient(player",
         "store:Remove(player)",
     ):
@@ -263,6 +284,31 @@ def validate(place_path: str) -> None:
         "require(script.Parent.ProgressionSessionStore)",
     ):
         assert fragment in progression_service_source, f"ProgressionService dependency missing: {fragment}"
+    wave_rules_source = source_of(server_modules["WaveRules"])
+    for fragment in (
+        "state.Spawned < state.TotalQuota",
+        "activeCount < maxAlive",
+        "state.Spawned += 1",
+        "activeWaveCount > 0",
+        "state.Cleared = true",
+    ):
+        assert fragment in wave_rules_source, f"WaveRules contract missing: {fragment}"
+    wave_service_source = source_of(server_modules["WaveService"])
+    for fragment in (
+        "require(script.Parent.WaveRules)",
+        'local WAVE_CLEARED_REMOTE = "WaveCleared"',
+        "HordeConfig.GetTotalSpawn(currentWave)",
+        "WaveRules.CanSpawn(state, zombieService.GetActiveCount(), HordeConfig.MaxAliveZombies)",
+        "zombieService.Spawn(currentWave)",
+        "task.wait(HordeConfig.CapPollInterval)",
+        "WaveRules.TryMarkCleared(state, zombieService.GetActiveCountForWave(currentWave))",
+        "clearedRemote:FireAllClients(currentWave)",
+        "if HordeConfig.Intermission > 0 then",
+    ):
+        assert fragment in wave_service_source, f"WaveService contract missing: {fragment}"
+    registry_source = source_of(server_modules["ActiveZombieRegistry"])
+    assert "function ActiveZombieRegistry:CountForWave(wave: number): number" in registry_source
+    assert "entry.SpawnWave == wave" in registry_source
     progression_rules_source = source_of(server_modules["ProgressionRules"])
     for fragment in (
         "BASE_REQUIRED_XP = 100",
@@ -299,11 +345,20 @@ def validate(place_path: str) -> None:
         assert fragment in damage_rules_source, f"DamageRules lethal guard missing: {fragment}"
     zombie_service_source = source_of(server_modules["ZombieService"])
     for fragment in (
-        "local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)",
+        "local maxHP = HordeConfig.GetZombieHP(spawnWave)",
+        "local zombieDamage = HordeConfig.GetZombieDamage(spawnWave)",
+        'model:SetAttribute("SpawnWave", spawnWave)',
+        'model:SetAttribute("ZombieDamage", zombieDamage)',
         'model:SetAttribute("MaxHP", maxHP)',
         'model:SetAttribute("CurrentHP", maxHP)',
         "function ZombieService.ApplyDamage(model: Model, damage: number)",
-        "function ZombieService.Spawn(): Model?",
+        "function ZombieService.Spawn(spawnWave: number): Model?",
+        "function ZombieService.GetActiveCountForWave(wave: number): number",
+        "function ZombieService.GetSpawnWave(model: Model): number?",
+        "SpawnWave = spawnWave",
+        "ZombieDamage = zombieDamage",
+        "humanoid.MaxHealth = maxHP",
+        "humanoid.Health = maxHP",
     ):
         assert fragment in zombie_service_source, f"Zombie HP implementation missing: {fragment}"
     spawn_rules_source = source_of(server_modules["ZombieRules"])
@@ -348,9 +403,9 @@ def validate(place_path: str) -> None:
     print(
         "PASS client mapping: "
         "StarterPlayerScripts.Bootstrap -> ReplicatedStorage.Client.CombatController "
-        "/ CombatFeedbackController damage UI / ShopController; "
-        "ServerScriptService.Bootstrap -> CombatService -> ProgressionService / "
-        "DamageRules / ZombieService / PlayerHealthService also resolved"
+        "/ WaveHud clear presentation / ProgressionHud / ShopController; "
+        "ServerScriptService.Bootstrap -> WaveService / WaveRules / CombatService / "
+        "ProgressionService / DamageRules / ZombieService / PlayerHealthService resolved"
     )
 
 

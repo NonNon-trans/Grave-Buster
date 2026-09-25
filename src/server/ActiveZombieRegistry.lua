@@ -35,6 +35,16 @@ function ActiveZombieRegistry:Count(): number
 	return self.count
 end
 
+function ActiveZombieRegistry:CountForWave(wave: number): number
+	local count = 0
+	for _, entry in self:Entries() do
+		if entry.SpawnWave == wave and entry.Lifecycle == "ACTIVE" then
+			count += 1
+		end
+	end
+	return count
+end
+
 function ActiveZombieRegistry:Entries()
 	return self.entries
 end

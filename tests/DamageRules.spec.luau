@@ -5,6 +5,8 @@ local WeaponConfig = require("../src/shared/WeaponConfig")
 local DamageConfig = require("../src/shared/DamageConfig")
 local KillCounter = require("../src/server/KillCounter")
 local ActiveZombieRegistry = require("../src/server/ActiveZombieRegistry")
+local HordeConfig = require("../src/shared/HordeConfig")
+local ProgressionRules = require("../src/server/ProgressionRules")
 
 assert(WeaponConfig.Validate())
 assert(DamageConfig.Validate())
@@ -87,5 +89,30 @@ assert(first.Lifecycle == "ACTIVE" and second.Lifecycle == "ACTIVE")
 
 assert(DamageRules.Apply({ Lifecycle = "ACTIVE", CurrentHP = 10, MaxHP = 10 }, 0) == nil)
 assert(DamageRules.Apply({ Lifecycle = "RELEASED", CurrentHP = 10, MaxHP = 10 }, 10) == nil)
+
+local wave1Bat = DamageRules.Apply({
+	Lifecycle = "ACTIVE",
+	CurrentHP = HordeConfig.GetZombieHP(1),
+	MaxHP = HordeConfig.GetZombieHP(1),
+}, ProgressionRules.FinalAttackDamage(10, 1))
+assert(wave1Bat and wave1Bat.Lethal and wave1Bat.AttackDamage == 10)
+local wave2Level1Bat = DamageRules.Apply({
+	Lifecycle = "ACTIVE",
+	CurrentHP = HordeConfig.GetZombieHP(2),
+	MaxHP = HordeConfig.GetZombieHP(2),
+}, ProgressionRules.FinalAttackDamage(10, 1))
+assert(wave2Level1Bat and not wave2Level1Bat.Lethal and wave2Level1Bat.AfterHP == 2)
+local wave2Level2Bat = DamageRules.Apply({
+	Lifecycle = "ACTIVE",
+	CurrentHP = HordeConfig.GetZombieHP(2),
+	MaxHP = HordeConfig.GetZombieHP(2),
+}, ProgressionRules.FinalAttackDamage(10, 2))
+assert(wave2Level2Bat and not wave2Level2Bat.Lethal and wave2Level2Bat.AfterHP == 1)
+local wave2Pan = DamageRules.Apply({
+	Lifecycle = "ACTIVE",
+	CurrentHP = HordeConfig.GetZombieHP(2),
+	MaxHP = HordeConfig.GetZombieHP(2),
+}, ProgressionRules.FinalAttackDamage(15, 1))
+assert(wave2Pan and wave2Pan.Lethal and wave2Pan.AttackDamage == 15)
 
 print("PASS DamageRules: lethal/non-lethal damage, kill gating, idempotence, and independent targets")

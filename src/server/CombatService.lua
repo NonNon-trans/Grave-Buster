@@ -276,6 +276,7 @@ local function performAttack(player: Player)
 	local damageResults = {}
 	local effectLimit = FeedbackConfig.GetEffectCount(config.MaxTargets)
 	local defeatCount = 0
+	local defeatsByWave = {}
 	for index = 1, math.min(#targets, config.MaxTargets) do
 		local model = targets[index]
 		local result = zombieService.ApplyDamage(model, attackDamage)
@@ -288,9 +289,13 @@ local function performAttack(player: Player)
 				Lethal = result.Lethal,
 			})
 			if result.Lethal then
+				local spawnWave = zombieService.GetSpawnWave(model)
 				local defeatedRoot, released = defeatZombie(model, root, weaponName, config)
 				if released then
 					defeatCount += 1
+					if spawnWave then
+						defeatsByWave[spawnWave] = (defeatsByWave[spawnWave] or 0) + 1
+					end
 					if defeatedRoot and #feedbackRoots < effectLimit then
 						table.insert(feedbackRoots, defeatedRoot)
 					end
@@ -304,7 +309,7 @@ local function performAttack(player: Player)
 	if defeatCount > 0 then
 		local kills = killCounter:Add(player, defeatCount)
 		player:SetAttribute(KILL_ATTRIBUTE, kills)
-		progressionService.AwardZombieDefeats(player, defeatCount)
+		progressionService.AwardZombieDefeats(player, defeatsByWave)
 		feedbackRemote:FireClient(player, weaponName, feedbackRoots)
 	end
 end
