@@ -17,6 +17,12 @@ function ProgressionSessionStore:GetOrCreate(player: Player)
 	return state
 end
 
+function ProgressionSessionStore:Set(player: Player, state)
+	self.Sessions[player] = state
+	self.HighestBonusedWave[player] = 0
+	return state
+end
+
 function ProgressionSessionStore:ClaimWaveBonus(player: Player, wave: number): boolean
 	self:GetOrCreate(player)
 	local highestWave = self.HighestBonusedWave[player]

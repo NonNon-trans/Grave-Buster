@@ -30,7 +30,13 @@ local function makePlayer(position, health)
 			return if name == "HumanoidRootPart" then root else nil
 		end,
 	}
-	return { Parent = playersService, Character = character }, humanoid, root
+	return {
+		Parent = playersService,
+		Character = character,
+		GetAttribute = function(_, name)
+			return if name == "ProgressionReady" then true else nil
+		end,
+	}, humanoid, root
 end
 
 local nearPlayer, nearHumanoid, nearRoot = makePlayer(vector(10, 0, 0), 100)

@@ -74,6 +74,7 @@ def validate(place_path: str) -> None:
         "WeaponSwitcherRules",
     ):
         modules[name] = direct_child(client, name, "ModuleScript")
+    assert not any(instance_name(item) == "PlayerHealthHud" for item in client.findall("Item"))
 
     starter_player = direct_child(root, "StarterPlayer", "StarterPlayer")
     starter_scripts = direct_child(starter_player, "StarterPlayerScripts", "StarterPlayerScripts")
@@ -221,11 +222,14 @@ def validate(place_path: str) -> None:
     server_modules = {}
     for name in (
         "ActiveZombieRegistry", "CombatService", "DamageRules", "KillCounter", "PlayerHealthService", "RunRules",
-        "ProgressionRules", "ProgressionService", "ProgressionSessionStore",
-        "ShopRules", "ShopService", "ShopSessionStore", "WaveRules", "WaveService",
+        "ProgressionDataRules", "ProgressionPersistence", "ProgressionRules", "ProgressionService", "ProgressionSessionStore",
+        "ShopRules", "ShopService", "WaveRules", "WaveService",
         "ZombieRules", "ZombieService",
     ):
         server_modules[name] = direct_child(server_scripts, name, "ModuleScript")
+    assert not any(instance_name(item) == "ShopSessionStore" for item in server_scripts.findall("Item")), (
+        "Obsolete duplicate weapon ownership store remains in generated place"
+    )
     server_bootstrap = direct_child(server_scripts, "Bootstrap", "Script")
     server_bootstrap_source = source_of(server_bootstrap)
     for fragment in (
@@ -242,16 +246,15 @@ def validate(place_path: str) -> None:
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
     shop_service_source = source_of(server_modules["ShopService"])
     for fragment in (
-        "ShopRules.ValidatePurchase(",
         "progressionService.GetCoins(player)",
-        "progressionService.TrySpendCoins(player, price)",
-        "ShopRules.GrantPurchase(session, weaponId)",
-        "store:Remove(player)",
+        "progressionService.TryPurchaseWeapon(player, weaponId)",
+        "progressionService.GetOwnedWeapons(player)",
         "purchaseLocks[player]",
     ):
         assert fragment in shop_service_source, f"ShopService contract missing: {fragment}"
     combat_service_source = source_of(server_modules["CombatService"])
     assert "shopService.IsOwned(player, requestedWeapon)" in combat_service_source
+    assert "if not progressionService.IsReady(player) then" in combat_service_source
     for fragment in (
         'local KILL_ATTRIBUTE = "SessionKills"',
         "killCounter:Add(player, defeatCount)",
@@ -288,17 +291,49 @@ def validate(place_path: str) -> None:
         'player:SetAttribute("Coins", state.Coins)',
         "ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)",
         "function ProgressionService.GetCoins(player: Player): number",
-        "function ProgressionService.TrySpendCoins(player: Player, amount: number): boolean",
+        "function ProgressionService.TryPurchaseWeapon(player: Player, weaponId: unknown)",
+        "function ProgressionService.SetEquippedWeapon(player: Player, weaponId: string): boolean",
         "function ProgressionService.AwardWaveClearBonus(wave: number): number",
+        'result.Status ~= "SUCCESS_NEW" and result.Status ~= "SUCCESS_EXISTING"',
+        "DEFAULT_PROFILE_LOAD_FAILURE_MESSAGE",
+        "game:BindToClose(saveAllOnClose)",
+        "task.wait(AUTOSAVE_INTERVAL)",
         "stateChangedRemote:FireClient(player",
         "store:Remove(player)",
     ):
         assert fragment in progression_service_source, f"ProgressionService contract missing: {fragment}"
     for fragment in (
         "require(script.Parent.ProgressionRules)",
+        "require(script.Parent.ProgressionDataRules)",
+        "require(script.Parent.ProgressionPersistence)",
         "require(script.Parent.ProgressionSessionStore)",
+        "require(script.Parent.ShopRules)",
     ):
         assert fragment in progression_service_source, f"ProgressionService dependency missing: {fragment}"
+    progression_data_rules_source = source_of(server_modules["ProgressionDataRules"])
+    for fragment in (
+        "function ProgressionDataRules.DefaultProfile",
+        "function ProgressionDataRules.Sanitize",
+        "function ProgressionDataRules.FromState",
+        "function ProgressionDataRules.ApplyToState",
+        "SchemaVersion = SCHEMA_VERSION",
+        "OwnedWeapons = table.clone(state.OwnedWeapons)",
+    ):
+        assert fragment in progression_data_rules_source, f"Progression data schema contract missing: {fragment}"
+    persistence_source = source_of(server_modules["ProgressionPersistence"])
+    for fragment in (
+        "function ProgressionPersistence:Load(userId: number, sessionId: string)",
+        "SUCCESS_NEW",
+        "SUCCESS_EXISTING",
+        'return { Status = "FAILURE", Reason = lastReason }',
+        "self.DataStore:UpdateAsync(key, function(oldRecord)",
+        'transformReason = "STALE_SESSION"',
+    ):
+        assert fragment in persistence_source, f"Progression persistence safety missing: {fragment}"
+    zombie_rules_source = source_of(server_modules["ZombieRules"])
+    assert 'player:GetAttribute("ProgressionReady") ~= true' in zombie_rules_source, (
+        "Zombie target selection must wait until progression loading succeeds"
+    )
     wave_rules_source = source_of(server_modules["WaveRules"])
     for fragment in (
         "state.Spawned < state.TotalQuota",

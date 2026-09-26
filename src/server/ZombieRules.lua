@@ -6,6 +6,9 @@ function ZombieRules.GetValidRoot(player: Player?, playersService: Players): Bas
 	if not player or player.Parent ~= playersService then
 		return nil
 	end
+	if player:GetAttribute("ProgressionReady") ~= true then
+		return nil
+	end
 	local character = player.Character
 	if not character then
 		return nil

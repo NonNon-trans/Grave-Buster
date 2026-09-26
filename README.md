@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-025 — Death / Run Reset / Best Wave**
+現在Phase: **GB-026 — Progression Persistence**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -11,7 +11,7 @@ Thunder Battleとは独立した新規Projectです。
 GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
 5種類のWeaponはRange・Hit shape・Knockbackで差別化します。GB-025からZombieはSpawnWaveに応じたDamageで近接攻撃し、全Player死亡時はRunをWave 1から再開します。
-Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownership、Player Level / XPはServer Authorityです。Level / XP、Currency、ownershipはSession-onlyで、DataStoreは未実装です。
+Combat result、Zombie lifecycle、Wave progression、Player Progression、Weapon ownershipはServer Authorityです。GB-026からLevel / XP / Coins / Owned / Equipped / Best WaveをDataStoreへ保存し、Run stateはJoinごとにWave 1から始めます。
 
 ## Platform direction
 
@@ -35,12 +35,13 @@ Grave-Buster/
 │   │   ├── KillCounter.lua
 │   │   ├── PlayerHealthService.lua
 │   │   ├── ProgressionRules.lua
+│   │   ├── ProgressionDataRules.lua
+│   │   ├── ProgressionPersistence.lua
 │   │   ├── ProgressionService.lua
 │   │   ├── ProgressionSessionStore.lua
 │   │   ├── RunRules.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
-│   │   ├── ShopSessionStore.lua
 │   │   ├── ZombieRules.lua
 │   │   ├── ZombieService.lua
 │   │   ├── WaveRules.lua
@@ -77,10 +78,10 @@ Grave-Buster/
 │   ├── KillCounter.spec.luau
 │   ├── ProgressionRules.spec.luau
 │   ├── ProgressionSessionStore.spec.luau
+│   ├── ProgressionPersistence.spec.luau
 │   ├── ShopConfig.spec.luau
 │   ├── ShopPresentation.spec.luau
 │   ├── ShopRules.spec.luau
-│   ├── ShopSessionStore.spec.luau
 │   ├── WeaponConfig.spec.luau
 │   ├── WeaponSwitcherRules.spec.luau
 │   ├── validate_client_mapping.py
@@ -93,9 +94,9 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Session Shop ownership / purchase validation、Player HP、Level / XP / Coins / Best Wave |
+| `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Progression persistence and ownership, Shop validation, Player HP |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression / HP UI |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -231,8 +232,8 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 - GB-005当時のEconomy baseline: Join時2000 test Coins。これはGB-024で廃止され、現行仕様は0 Coins開始です。
 - GB-005当時のPrices: Pan 200、Hammer 400、Blower 600、Thunder Rod 1000 Coins。GB-024で正式価格へ更新しました。
-- Server authority: `ShopService`はOwned Weapons / revision / purchase lockを所有し、Coinsは`ProgressionService`がLevel / XPと同じsession stateで管理します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、Coins、request shapeを検証します。
-- State sync: `GetState`はProgressionServiceのCoinsとShopServiceのOwned Weapons / Equipped Weapon / Revisionを合成して返します。購入成功時はShop snapshotとProgression snapshotからClient表示を更新します。
+- Server authority: `ProgressionService`がCoins / Owned Weapons / Equipped Weaponを含む唯一のPlayer profile stateを所有します。`ShopService`はpurchase request lockとUI revisionだけを管理し、ClientはWeapon IDだけを送信します。
+- State sync: `GetState`はProgressionServiceのCoins / Owned / Equippedを読み、ShopServiceのUI revisionを添えて返します。購入成功時は同じProgression stateを更新し、Shop / progression snapshotからClient表示を更新します。
 - SHOP button: `CoreUISafeInsets`内の右上、112×46 px。Shop Panelは中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
 - Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
 - Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
@@ -268,7 +269,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 ## Player Level & XP（GB-022）
 
-- `ProgressionService`がPlayerごとのLevel / current-level XPをServer session内で保持します。初期値はLevel 1 / XP 0。Character Reset / Respawnでは維持され、Leave時に破棄します。DataStore、Coins、Shop価格、Wave scaling、Player damage、Death run resetは含みません。
+- GB-022導入時は`ProgressionService`がLevel / current-level XPをSession内だけで保持していました。GB-026では既存Progression stateをDataStoreへ接続し、当時のSession-only境界を置き換えます。
 - XPはZombieをlethal defeatして既存ZombieService.Releaseに成功した時だけ付与します。報酬はServerが保持するZombie `SpawnWave`に基づき、`5 + floor(Wave / 2)` XPをdefeatごとに加算します。Non-lethal hitや二重Releaseでは報酬がありません。
 - 次Levelに必要なXPは`100 + (Level - 1) × 50`。overflowを保持し、1回の複数defeat報酬でも必要なだけLevel Upを繰り返します。Level multiplierは`1 + 0.05 × (Level - 1)`で、ServerのCombatServiceがWeapon BaseDamageへ`math.round`相当を適用してDamageRulesへ渡します。Overkill Damage Numberは引き続きServer解決済みFinal AttackDamageを表示します。
 - `ProgressionHud`は右上SHOP buttonの下にLevel、XP bar、数値を表示し、Server snapshot更新時に反映します。Level Upは短い集約表示で旧→新Levelとdamage増加を示し、Combatをpauseしません。
@@ -295,7 +296,7 @@ Human Gate未実施のため、Static validationは視覚・操作確認の代�
 
 ## Coins & Shop Economy（GB-024）
 
-- Coinsは`ProgressionService`のPlayer session stateがLevel / XPとともに所有します。開始時0、Character Reset / Respawnでは維持、Leaveで破棄し、DataStoreはありません。ShopServiceは残高を保持せず、Shop snapshotではProgressionServiceから読みます。
+- GB-024時点ではCoinsはLevel / XPと同じPlayer session stateに置き、Leaveで破棄していました。GB-026でこのstateをDataStoreに永続化します。ShopServiceは残高を保持せず、Shop snapshotではProgressionServiceから読みます。
 - Zombieをlethalにし、`ZombieService.Release`に成功した同一kill resultから、SpawnWave別にXP `5 + floor(Wave / 2)` とCoins `1 + floor(Wave / 3)`を一括付与します。non-lethal hit / Release失敗 / DEFEATED再処理ではどちらも増えません。
 - Wave bonusはGB-023のquota完了かつ当該Wave ACTIVE数0のclear判定後に`Wave × 10`を一度付与します。WaveRulesの一回clearとPlayer session claim ledgerで重複を防ぎ、clear通知・次Wave開始は止めません。
 - `ShopConfig`が正式価格を一元管理します: Batは初期Owned、Pan 80、Hammer 220、Blower 500、Thunder Rod 900 Coins。PurchaseはServerで検証し、ProgressionServiceがCoinsを減算した後、ShopServiceがOwnedを付与します。購入のみで自動Equipしません。
@@ -310,7 +311,7 @@ Human Gate未実施のため、Static validationは視覚・操作確認の代�
 - `Players.RespawnTime`を2.5秒に設定し、RespawnしたCharacterはHP 100で再構成されます。Respawn Protectionは2秒間有効で、Playerの最初のAttack intentで即時解除します。
 - Zombieから実際にHP Damageを受けたPlayerには別stateの2秒Hit Invulnerabilityを付与します。期間中に別Zombieが攻撃しても無効となり、blocked hitは期限を延長しません。Player Attackはこのtimerを解除せず、Playerごとに独立しています。
 - Humanoid死亡（Reset Characterを含む）をPlayer unavailableとして共有Waveへ通知します。少なくとも一人のHumanが生存中はWave / Zombieを維持します。全Human死亡または最後のPlayer離脱時だけrun generationを一度進め、Waveを0へ戻し、Workspace.Zombies内のACTIVE個体とDefeated bodyをすべて削除し、Wave 1を開始します。再Spawnを待つ間はWave spawnが停止します。
-- Level / XP / Coins / Owned / Equippedは既存session storesで維持されます。`BestWave`はProgressionService stateに追加し、到達Waveが過去記録を超えた時だけ更新して`NEW RECORD! WAVE N`を短く表示します。Wave 1へのrun resetでは記録を下げません。Leaveでsession stateを破棄します。
+- Level / XP / Coins / Owned / EquippedはProgressionService profile stateで維持されます。`BestWave`は到達Waveが過去記録を超えた時だけ更新して`NEW RECORD! WAVE N`を短く表示します。Wave 1へのrun resetでは記録を下げません。GB-026でprofileはLeave後もDataStoreに残ります。
 - Player HPはRoblox標準のHealth表示を使用し、独自の重複HUDは生成しません。`RunRules.spec.luau`はdamage interval、hit invulnerability、protected damage、solo / multiplayer reset decision、BestWaveの非減少を検証します。Wave / Zombie integrationとRespawn timeはStudio / Published Human Gateで確認してください。
 
 ## Human Studio Check（GB-023）
@@ -337,11 +338,11 @@ build/luau-tools/luau tests/HoldState.spec.luau
 build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau
 build/luau-tools/luau tests/ShopConfig.spec.luau
 build/luau-tools/luau tests/ShopRules.spec.luau
-build/luau-tools/luau tests/ShopSessionStore.spec.luau
 build/luau-tools/luau tests/FeedbackConfig.spec.luau
 build/luau-tools/luau tests/KillCounter.spec.luau
 build/luau-tools/luau tests/ProgressionRules.spec.luau
 build/luau-tools/luau tests/ProgressionSessionStore.spec.luau
+build/luau-tools/luau tests/ProgressionPersistence.spec.luau
 python3 tests/validate_client_mapping.py build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
@@ -462,3 +463,18 @@ Published Mobile Human GateはこのArtifactをTEST ExperienceへPublishし、La
 6. Waveを過去BestWave以上へ進めて`NEW RECORD! WAVE N`表示を確認し、ResetでWave 1に戻ってもBestWaveが変わらないことを確認します。
 7. 2人以上でTestし、片方を死亡 / Resetしても生存者のWaveとZombieが継続すること、全員が死亡した時だけ共有Waveがcleanup後Wave 1へ戻ることを確認します。
 8. Wave scaling / quota / Intermission 0、Level / XP / Coins、Shop / Owned / Equipped、Slider、Combat / Damage / Knockback / KILLS、PC / Mobile UI、Arena / Fog / Clouds / Spawnを回帰確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceをPublishしたPhysical Mobile DeviceのLandscapeで行います。
+
+## Progression Persistence（GB-026）
+
+- DataStore profile schema version 1には`Level` / `XP` / `Coins` / `OwnedWeapons` / `EquippedWeapon` / `BestWave`だけを保存します。Wave / HP / Zombie / Run / Kills / protection stateは保存しません。新規profileはLevel 1、XP 0、Coins 0、BatのみOwned / Equipped、BestWave 1です。
+- `ProgressionService`がGameplay stateとSave対象のsingle sourceです。`ProgressionDataRules`がschema / sanitize / serializeを担当し、`ProgressionPersistence`がDataStoreのload / UpdateAsync save / bounded retryを担当します。Shopの購入・Equipも同じprofileを変更します。
+- Loadは`SUCCESS_EXISTING` / `SUCCESS_NEW` / `FAILURE`を区別します。Load失敗やsession lock競合時はDefaultを確定保存せずPlayerをKickし、既存profileを保護します。破損した個別値は安全な下限 / fallbackへsanitizeし、未知Weaponは落としてBatを必ず残します。未知schema versionは上書きせず失敗扱いです。
+- Autosaveは45秒ごと、PlayerRemoving、BindToCloseで行い、各writeは最大3回retryします。Per-player 120秒 leaseをUpdateAsyncで更新し、古いserver session tokenのSaveを拒否します。短いSave failureではmemory stateを変更せず、後続autosaveで再試行します。
+- `ProgressionPersistence.spec.luau`はnew / existing round-trip、run state除外、sanitize、load / save failure、player分離、stale session拒否をmock DataStoreで検証します。Studio API failure時はJoinを拒否するため、Load失敗時も新規Defaultとして遊ばせる挙動にはなりません。
+
+Studio / Human Gate:
+
+1. StudioのGame Settings → SecurityでStudio Access to API Servicesを有効にします。実データと混ざらないよう、まずTEST Experience / test universeで検証します。
+2. Level / XP / Coinsを増やし、Weaponを購入・Equipし、Best Waveを更新してLeaveします。同じTEST ExperienceへRejoinし、それらが復元されることを確認します。
+3. RejoinごとにWave 1 / HP 100 / KILLS 0で開始し、Zombie / Run stateが引き継がれないことを確認します。Character Reset / Deathは現在のLoaded progressionを維持します。
+4. DataStore unavailableを試す場合、Studio API accessを無効にするかmock testを使います。PlayerがKickされ、既存DataをDefaultで上書きしないことを確認します。既存本番dataを使ったfailure testは行いません。

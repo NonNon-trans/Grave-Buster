@@ -253,7 +253,7 @@ function ShopController.Start(combatController)
 			syncing = false
 			if ok and state then
 				applyState(state)
-			else
+			elseif not ok then
 				feedback.Text = "SHOP CONNECTION ERROR"
 			end
 		end)
@@ -323,7 +323,10 @@ function ShopController.Start(combatController)
 		confirmedEquipped = player:GetAttribute("EquippedWeapon")
 		render()
 	end)
-	stateChangedRemote.OnClientEvent:Connect(applyState)
+	stateChangedRemote.OnClientEvent:Connect(function(state)
+		feedback.Text = ""
+		applyState(state)
+	end)
 	progressionStateChanged.OnClientEvent:Connect(function(snapshot)
 		if type(snapshot) == "table" then
 			OwnedWeaponSource.ApplyAuthoritativeCoins(snapshot.Coins)
