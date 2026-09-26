@@ -6,6 +6,10 @@ function RunRules.CanZombieAttack(nextAttackAt: number, now: number, targetAlive
 	return targetAlive and now >= nextAttackAt
 end
 
+function RunRules.CanReceiveZombieDamage(now: number, nextDamageAt: number, respawnProtected: boolean): boolean
+	return not respawnProtected and now >= nextDamageAt
+end
+
 function RunRules.ApplyPlayerDamage(currentHP: number, maxHP: number, damage: number, protected: boolean): number?
 	if protected or currentHP <= 0 or damage <= 0 then
 		return nil

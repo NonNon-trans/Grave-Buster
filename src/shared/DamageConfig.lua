@@ -4,6 +4,7 @@ local DamageConfig = {
 	PlayerMaxHP = 100,
 	ZombieAttackInterval = 1.0,
 	ZombieAttackRange = 5.5,
+	PlayerHitInvulnerabilityDuration = 2.0,
 	RespawnDelay = 2.5,
 	RespawnProtectionDuration = 2,
 	ZombieHealthBarLifetime = 1.5,
@@ -14,6 +15,7 @@ function DamageConfig.Validate(): boolean
 	assert(DamageConfig.PlayerMaxHP == 100)
 	assert(DamageConfig.ZombieAttackInterval == 1.0)
 	assert(DamageConfig.ZombieAttackRange > 0)
+	assert(DamageConfig.PlayerHitInvulnerabilityDuration == 2.0)
 	assert(DamageConfig.RespawnDelay >= 2 and DamageConfig.RespawnDelay <= 3)
 	assert(DamageConfig.RespawnProtectionDuration == 2)
 	assert(DamageConfig.ZombieHealthBarLifetime == 1.5)

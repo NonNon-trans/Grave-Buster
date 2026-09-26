@@ -396,6 +396,10 @@ def validate(place_path: str) -> None:
         'Players.RespawnTime = DamageConfig.RespawnDelay',
         'humanoid:TakeDamage(damage)',
         'player:SetAttribute(PROTECTED_ATTRIBUTE, true)',
+        "nextZombieDamageAt[player] = now + DamageConfig.PlayerHitInvulnerabilityDuration",
+        "RunRules.CanReceiveZombieDamage(now, nextDamageAt, PlayerHealthService.IsProtected(player))",
+        "if humanoid.Health >= beforeHP then",
+        "nextZombieDamageAt[player] = nil",
     ):
         assert fragment in player_health_source, f"Player HP foundation missing: {fragment}"
     damage_feedback_source = source_of(modules["CombatFeedbackController"])
@@ -420,10 +424,13 @@ def validate(place_path: str) -> None:
     run_rules_source = source_of(server_modules["RunRules"])
     for fragment in (
         "function RunRules.CanZombieAttack",
+        "function RunRules.CanReceiveZombieDamage",
         "function RunRules.ShouldResetRun",
         "function RunRules.RecordBestWave",
     ):
         assert fragment in run_rules_source, f"RunRules contract missing: {fragment}"
+    damage_config_source = source_of(direct_child(shared, "DamageConfig", "ModuleScript"))
+    assert "PlayerHitInvulnerabilityDuration = 2.0" in damage_config_source
     assert "Position = hitPosition" not in combat_service_source
     assert "createImpact" not in feedback_source
     assert "ZombieImpactFlash" not in feedback_source

@@ -10,6 +10,7 @@ local PlayerHealthService = {}
 local started = false
 local playerConnections = {}
 local deathConnections = {}
+local nextZombieDamageAt = {}
 local runCoordinator = nil
 local PROTECTED_ATTRIBUTE = "RespawnProtected"
 
@@ -37,6 +38,7 @@ local function configureCharacter(player: Player, character: Model)
 	player:SetAttribute("MaxHP", DamageConfig.PlayerMaxHP)
 	humanoid.MaxHealth = DamageConfig.PlayerMaxHP
 	humanoid.Health = DamageConfig.PlayerMaxHP
+	nextZombieDamageAt[player] = nil
 	setProtection(player, character)
 	deathConnections[player] = humanoid.Died:Connect(function()
 		if player.Character == character then
@@ -83,6 +85,7 @@ function PlayerHealthService.Start(coordinator)
 			deathConnection:Disconnect()
 			deathConnections[player] = nil
 		end
+		nextZombieDamageAt[player] = nil
 		runCoordinator.NotifyPlayerUnavailable(player)
 	end)
 end
@@ -115,6 +118,11 @@ function PlayerHealthService.DamagePlayer(player: Player, damage: number): boole
 	if not humanoid or humanoid.Health <= 0 then
 		return false
 	end
+	local now = os.clock()
+	local nextDamageAt = nextZombieDamageAt[player] or 0
+	if not RunRules.CanReceiveZombieDamage(now, nextDamageAt, PlayerHealthService.IsProtected(player)) then
+		return false
+	end
 	local afterHP = RunRules.ApplyPlayerDamage(
 		humanoid.Health,
 		humanoid.MaxHealth,
@@ -124,7 +132,12 @@ function PlayerHealthService.DamagePlayer(player: Player, damage: number): boole
 	if afterHP == nil then
 		return false
 	end
+	local beforeHP = humanoid.Health
 	humanoid:TakeDamage(damage)
+	if humanoid.Health >= beforeHP then
+		return false
+	end
+	nextZombieDamageAt[player] = now + DamageConfig.PlayerHitInvulnerabilityDuration
 	return true
 end
 
