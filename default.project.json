@@ -25,9 +25,6 @@
         "ProgressionHud": {
           "$path": "src/client/ProgressionHud.lua"
         },
-        "PlayerHealthHud": {
-          "$path": "src/client/PlayerHealthHud.lua"
-        },
         "CombatController": {
           "$path": "src/client/CombatController.lua"
         },

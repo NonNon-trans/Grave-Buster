@@ -54,7 +54,6 @@ Grave-Buster/
 │   │   ├── ShopController.lua
 │   │   ├── ShopPresentation.lua
 │   │   ├── ProgressionHud.lua
-│   │   ├── PlayerHealthHud.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
@@ -312,7 +311,7 @@ Human Gate未実施のため、Static validationは視覚・操作確認の代�
 - Zombieから実際にHP Damageを受けたPlayerには別stateの2秒Hit Invulnerabilityを付与します。期間中に別Zombieが攻撃しても無効となり、blocked hitは期限を延長しません。Player Attackはこのtimerを解除せず、Playerごとに独立しています。
 - Humanoid死亡（Reset Characterを含む）をPlayer unavailableとして共有Waveへ通知します。少なくとも一人のHumanが生存中はWave / Zombieを維持します。全Human死亡または最後のPlayer離脱時だけrun generationを一度進め、Waveを0へ戻し、Workspace.Zombies内のACTIVE個体とDefeated bodyをすべて削除し、Wave 1を開始します。再Spawnを待つ間はWave spawnが停止します。
 - Level / XP / Coins / Owned / Equippedは既存session storesで維持されます。`BestWave`はProgressionService stateに追加し、到達Waveが過去記録を超えた時だけ更新して`NEW RECORD! WAVE N`を短く表示します。Wave 1へのrun resetでは記録を下げません。Leaveでsession stateを破棄します。
-- `PlayerHealthHud`は左上KILLS表示の直下に現在HPとbarを表示します。`RunRules.spec.luau`はdamage interval、protected damage、solo / multiplayer reset decision、BestWaveの非減少を検証します。Wave / Zombie integration、Respawn time、Mobile HUD位置はStudio / Published Human Gateで確認してください。
+- Player HPはRoblox標準のHealth表示を使用し、独自の重複HUDは生成しません。`RunRules.spec.luau`はdamage interval、hit invulnerability、protected damage、solo / multiplayer reset decision、BestWaveの非減少を検証します。Wave / Zombie integrationとRespawn timeはStudio / Published Human Gateで確認してください。
 
 ## Human Studio Check（GB-023）
 
@@ -455,7 +454,7 @@ Published Mobile Human GateはこのArtifactをTEST ExperienceへPublishし、La
 
 ## Human Studio / Published Mobile Check（GB-025）
 
-1. `build/Grave-Buster-v0.2-GB025-run-reset.rbxlx`をStudioで開き、Playします。PlayerがHP 100でSpawnし、左上KILLSの直下にHP数値とbarが表示されることを確認します。
+1. `build/Grave-Buster-v0.2-GB025-no-player-hp-hud.rbxlx`をStudioで開き、Playします。PlayerがHP 100でSpawnし、Roblox標準Health表示が機能することを確認します。Grave Buster独自のHP HUDは表示されません。
 2. Zombieが近接するとHPが減ることを確認します。最初のWaveのDamageは10、Wave 6では12、Wave 13では16です。最初の被弾から2秒間は別ZombieのDamageも無効になり、blocked hitで期限が延長されないこと、Player Attackでも解除されないことを確認します。Respawn Protectionは別の2秒stateとしてAttackで解除されます。Zombie DamageにPlayer knockbackがないことも確認します。
 3. Zombieへ近接攻撃させて死亡し、約2.5秒後にHP 100でRespawn、Zombie群が全 cleanup、Wave 1から再開することを確認します。Level / XP / Coins / Owned / Equipped / BestWaveは維持されます。
 4. Roblox標準Reset Characterを実行し、Deathと同じSolo Run Resetになることを確認します。Reset連打や死亡同時発生でもWave 1が二重起動せず、Zombieが再蓄積しないことを確認します。

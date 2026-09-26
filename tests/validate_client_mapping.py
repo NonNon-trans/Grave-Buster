@@ -69,7 +69,6 @@ def validate(place_path: str) -> None:
         "ShopPresentation",
         "WaveHud",
         "ProgressionHud",
-        "PlayerHealthHud",
         "WeaponPresenter",
         "WeaponSwitcher",
         "WeaponSwitcherRules",
@@ -88,15 +87,17 @@ def validate(place_path: str) -> None:
         'clientModules:WaitForChild("CombatFeedbackController")',
         'clientModules:WaitForChild("ShopController")',
         'clientModules:WaitForChild("ProgressionHud")',
-        'clientModules:WaitForChild("PlayerHealthHud")',
         "CombatFeedbackController.Start()",
         "ProgressionHud.Start()",
-        "PlayerHealthHud.Start()",
         "ShopController.Start(CombatController)",
     )
     for fragment in required_bootstrap_fragments:
         assert fragment in bootstrap_source, f"Bootstrap does not resolve {fragment}"
     assert "script.Parent.CombatController" not in bootstrap_source
+    assert not any(instance_name(item) == "PlayerHealthHud" for item in client.findall("Item")), (
+        "Redundant PlayerHealthHud remains in generated place"
+    )
+    assert "PlayerHealthHud" not in bootstrap_source, "Bootstrap still depends on the removed PlayerHealthHud"
 
     controller_source = source_of(modules["CombatController"])
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
