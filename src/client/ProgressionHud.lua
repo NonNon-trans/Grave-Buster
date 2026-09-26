@@ -103,6 +103,25 @@ function ProgressionHud.Start()
 	toastCorner.CornerRadius = UDim.new(0, 6)
 	toastCorner.Parent = levelUpLabel
 
+	local recordLabel = Instance.new("TextLabel")
+	recordLabel.Name = "BestWaveFeedback"
+	recordLabel.AnchorPoint = Vector2.new(0.5, 0)
+	recordLabel.Position = UDim2.new(0.5, 0, 0, 112)
+	recordLabel.Size = UDim2.fromOffset(250, 36)
+	recordLabel.BackgroundColor3 = Color3.fromRGB(65, 72, 48)
+	recordLabel.BackgroundTransparency = 0.12
+	recordLabel.BorderSizePixel = 0
+	recordLabel.Font = Enum.Font.GothamBold
+	recordLabel.TextColor3 = Color3.fromRGB(255, 242, 189)
+	recordLabel.TextStrokeColor3 = Color3.fromRGB(20, 20, 20)
+	recordLabel.TextStrokeTransparency = 0.5
+	recordLabel.TextSize = 15
+	recordLabel.Visible = false
+	recordLabel.Parent = gui
+	local recordCorner = Instance.new("UICorner")
+	recordCorner.CornerRadius = UDim.new(0, 6)
+	recordCorner.Parent = recordLabel
+
 	local function render(snapshot)
 		local level = if snapshot then snapshot.Level else player:GetAttribute("PlayerLevel")
 		local currentXP = if snapshot then snapshot.CurrentXP else player:GetAttribute("CurrentXP")
@@ -141,6 +160,22 @@ function ProgressionHud.Start()
 		end)
 	end
 
+	local recordGeneration = 0
+	local function showBestWave(snapshot)
+		if snapshot.NewRecord ~= true or type(snapshot.RecordWave) ~= "number" then
+			return
+		end
+		recordGeneration += 1
+		local generation = recordGeneration
+		recordLabel.Text = string.format("NEW RECORD!  WAVE %d", snapshot.RecordWave)
+		recordLabel.Visible = true
+		task.delay(2.2, function()
+			if generation == recordGeneration and recordLabel.Parent then
+				recordLabel.Visible = false
+			end
+		end)
+	end
+
 	for _, attributeName in { "PlayerLevel", "CurrentXP", "RequiredXP" } do
 		player:GetAttributeChangedSignal(attributeName):Connect(function()
 			render(nil)
@@ -154,6 +189,7 @@ function ProgressionHud.Start()
 		end
 		render(snapshot)
 		showLevelUp(snapshot)
+		showBestWave(snapshot)
 	end)
 	render(nil)
 end

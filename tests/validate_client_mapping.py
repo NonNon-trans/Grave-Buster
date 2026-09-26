@@ -94,6 +94,10 @@ def validate(place_path: str) -> None:
     for fragment in required_bootstrap_fragments:
         assert fragment in bootstrap_source, f"Bootstrap does not resolve {fragment}"
     assert "script.Parent.CombatController" not in bootstrap_source
+    assert not any(instance_name(item) == "PlayerHealthHud" for item in client.findall("Item")), (
+        "Redundant PlayerHealthHud remains in generated place"
+    )
+    assert "PlayerHealthHud" not in bootstrap_source, "Bootstrap still depends on the removed PlayerHealthHud"
 
     controller_source = source_of(modules["CombatController"])
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
@@ -216,7 +220,7 @@ def validate(place_path: str) -> None:
     )
     server_modules = {}
     for name in (
-        "ActiveZombieRegistry", "CombatService", "DamageRules", "KillCounter", "PlayerHealthService",
+        "ActiveZombieRegistry", "CombatService", "DamageRules", "KillCounter", "PlayerHealthService", "RunRules",
         "ProgressionRules", "ProgressionService", "ProgressionSessionStore",
         "ShopRules", "ShopService", "ShopSessionStore", "WaveRules", "WaveService",
         "ZombieRules", "ZombieService",
@@ -228,10 +232,11 @@ def validate(place_path: str) -> None:
         "require(script.Parent.ProgressionService)",
         "require(script.Parent.ShopService)",
         "require(script.Parent.PlayerHealthService)",
-        "PlayerHealthService.Start()",
+        "PlayerHealthService.Start(WaveService)",
+        "ZombieService.Start(PlayerHealthService)",
         "ShopService.Start(ProgressionService)",
         "ProgressionService.Start()",
-        "CombatService.Start(ZombieService, ShopService, ProgressionService)",
+        "CombatService.Start(ZombieService, ShopService, ProgressionService, PlayerHealthService)",
         "WaveService.Start(ZombieService, ProgressionService)",
     ):
         assert fragment in server_bootstrap_source, f"Server Bootstrap does not resolve {fragment}"
@@ -279,6 +284,7 @@ def validate(place_path: str) -> None:
         'player:SetAttribute("PlayerLevel", state.Level)',
         'player:SetAttribute("CurrentXP", state.XP)',
         'player:SetAttribute("RequiredXP"',
+        'player:SetAttribute("BestWave", state.BestWave)',
         'player:SetAttribute("Coins", state.Coins)',
         "ProgressionRules.AwardZombieDefeatsByWave(state, defeatsByWave)",
         "function ProgressionService.GetCoins(player: Player): number",
@@ -306,14 +312,15 @@ def validate(place_path: str) -> None:
     for fragment in (
         "require(script.Parent.WaveRules)",
         'local WAVE_CLEARED_REMOTE = "WaveCleared"',
-        "HordeConfig.GetTotalSpawn(currentWave)",
+        "HordeConfig.GetTotalSpawn(wave)",
         "WaveRules.CanSpawn(state, zombieService.GetActiveCount(), HordeConfig.MaxAliveZombies)",
-        "zombieService.Spawn(currentWave)",
+        "zombieService.Spawn(wave)",
         "task.wait(HordeConfig.CapPollInterval)",
-        "WaveRules.TryMarkCleared(state, zombieService.GetActiveCountForWave(currentWave))",
-        "progressionService.AwardWaveClearBonus(currentWave)",
-        "clearedRemote:FireAllClients(currentWave)",
-        "if HordeConfig.Intermission > 0 then",
+        "WaveRules.TryMarkCleared(state, zombieService.GetActiveCountForWave(wave))",
+        "progressionService.AwardWaveClearBonus(wave)",
+        "clearedRemote:FireAllClients(wave)",
+        "zombieService.ClearForNewRun()",
+        "if HordeConfig.Intermission > 0 and isCurrent(runGeneration) then",
     ):
         assert fragment in wave_service_source, f"WaveService contract missing: {fragment}"
     registry_source = source_of(server_modules["ActiveZombieRegistry"])
@@ -386,6 +393,14 @@ def validate(place_path: str) -> None:
         "humanoid.MaxHealth = DamageConfig.PlayerMaxHP",
         "humanoid.Health = DamageConfig.PlayerMaxHP",
         'player.CharacterAdded:Connect',
+        "runCoordinator.NotifyPlayerUnavailable(player)",
+        'Players.RespawnTime = DamageConfig.RespawnDelay',
+        'humanoid:TakeDamage(damage)',
+        'player:SetAttribute(PROTECTED_ATTRIBUTE, true)',
+        "nextZombieDamageAt[player] = now + DamageConfig.PlayerHitInvulnerabilityDuration",
+        "RunRules.CanReceiveZombieDamage(now, nextDamageAt, PlayerHealthService.IsProtected(player))",
+        "if humanoid.Health >= beforeHP then",
+        "nextZombieDamageAt[player] = nil",
     ):
         assert fragment in player_health_source, f"Player HP foundation missing: {fragment}"
     damage_feedback_source = source_of(modules["CombatFeedbackController"])
@@ -399,6 +414,24 @@ def validate(place_path: str) -> None:
         "createDamageNumber(root, result.AttackDamage,",
     ):
         assert fragment in damage_feedback_source, f"Damage presentation missing: {fragment}"
+    zombie_service_source = source_of(server_modules["ZombieService"])
+    for fragment in (
+        "DamageConfig.ZombieAttackInterval",
+        "entry.ZombieDamage",
+        "healthService.DamagePlayer(entry.TargetPlayer, entry.ZombieDamage)",
+        "function ZombieService.ClearForNewRun()",
+    ):
+        assert fragment in zombie_service_source, f"Zombie attack/run cleanup contract missing: {fragment}"
+    run_rules_source = source_of(server_modules["RunRules"])
+    for fragment in (
+        "function RunRules.CanZombieAttack",
+        "function RunRules.CanReceiveZombieDamage",
+        "function RunRules.ShouldResetRun",
+        "function RunRules.RecordBestWave",
+    ):
+        assert fragment in run_rules_source, f"RunRules contract missing: {fragment}"
+    damage_config_source = source_of(direct_child(shared, "DamageConfig", "ModuleScript"))
+    assert "PlayerHitInvulnerabilityDuration = 2.0" in damage_config_source
     assert "Position = hitPosition" not in combat_service_source
     assert "createImpact" not in feedback_source
     assert "ZombieImpactFlash" not in feedback_source
