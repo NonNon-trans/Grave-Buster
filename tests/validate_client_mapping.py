@@ -121,7 +121,30 @@ def validate(place_path: str) -> None:
 
     switcher_source = source_of(modules["WeaponSwitcher"])
     assert 'script.Parent:WaitForChild("WeaponSwitcherRules")' in switcher_source
-    assert "requested and requested ~= cursor" in switcher_source
+    for fragment in (
+        "Rules.ProjectFlick(",
+        "Rules.FlickSnapIndex(",
+        "Rules.ArrowStep(baseIndex, direction",
+        "snapCommitGate:Commit(snapToken)",
+        "requestEquip(committedIndex)",
+        "RunService.Heartbeat:Connect",
+        "Tuning.SnapDuration",
+    ):
+        assert fragment in switcher_source, f"Momentum Weapon Switcher contract missing: {fragment}"
+    assert "local Tuning = Rules.Tuning" in switcher_source
+    assert "Rules.OrderOwned(validOwned, WeaponConfig.Order)" in switcher_source
+    assert "wrap" not in switcher_source.lower(), "Production Weapon Switcher must not wrap at its boundaries"
+    switcher_rules_source = source_of(modules["WeaponSwitcherRules"])
+    for fragment in (
+        "FlickVelocityThreshold = 550",
+        "Deceleration = 1800",
+        "MaximumFlickTravel = 5",
+        "function WeaponSwitcherRules.ArrowStep",
+        "function WeaponSwitcherRules.FlickTravel",
+        "function WeaponSwitcherRules.FlickSnapIndex",
+        "function SnapCommitGate:Commit",
+    ):
+        assert fragment in switcher_rules_source, f"Momentum Slider tuning/rules missing: {fragment}"
     owned_source = source_of(modules["OwnedWeaponSource"])
     assert "ApplyAuthoritativeState" in owned_source
     assert "WeaponConfig.DefaultWeapon" in owned_source

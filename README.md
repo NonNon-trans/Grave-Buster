@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-026 — Progression Persistence**
+現在Phase: **GB-027 — Momentum Weapon Slider**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -96,7 +96,7 @@ Grave-Buster/
 | --- | --- | --- |
 | `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Progression persistence and ownership, Shop validation, Player HP |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Momentum Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -478,3 +478,17 @@ Studio / Human Gate:
 2. Level / XP / Coinsを増やし、Weaponを購入・Equipし、Best Waveを更新してLeaveします。同じTEST ExperienceへRejoinし、それらが復元されることを確認します。
 3. RejoinごとにWave 1 / HP 100 / KILLS 0で開始し、Zombie / Run stateが引き継がれないことを確認します。Character Reset / Deathは現在のLoaded progressionを維持します。
 4. DataStore unavailableを試す場合、Studio API accessを無効にするかmock testを使います。PlayerがKickされ、既存DataをDefaultで上書きしないことを確認します。既存本番dataを使ったfailure testは行いません。
+
+## Momentum Weapon Slider（GB-027）
+
+- 左右Arrowは確定済み位置からちょうど1つ進み、端で止まります。中央picker stripはpointer dragへ連続追従し、release後のvelocityがthreshold以上なら慣性減速してから最寄りWeaponへsnapします。Drag / inertia中はpreviewだけを表示し、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。
+- SliderはOwned Weapon listだけを既存Weapon orderで表示します。Purchase後のlist refresh、Equipped state、DataStore ownershipは既存`OwnedWeaponSource` / `ProgressionService`を引き続き利用します。
+- Tuningは`WeaponSwitcherRules.Tuning`に集約しています。初期値はslot width 72%、flick threshold 550 px/s、deceleration 1800 px/s²、minimum flick travel 0.85 weapon、maximum 5 weapons、snap 0.24秒です。Idle半透明、操作中の完全表示、snap後1秒保持、0.3秒fadeも同じRules configで調整できます。
+
+Human Studio / Published Mobile Check:
+
+1. `build/Grave-Buster-v0.2-GB027-momentum-slider.rbxlx`をStudioで開き、複数WeaponをOwnedにしてPlayします。TEST Experienceで購入してもよいです。
+2. Arrowを連打し、各Tapが1 Weaponだけ切り替わり、最初・最後でwrapしないことを確認します。
+3. 中央pickerをゆっくり左右へdragし、Weapon列がpointerへ追従すること、release後にnearest itemへsnapすることを確認します。Flick中に通過WeaponがEquipされず、snap後のWeaponだけがEquipされることを確認します。
+4. 弱い / 中程度 / 強いFlickを試し、順に約1 / 2〜3 / 最大5 Weapon程度動き、減速してからsnapすることを確認します。強いFlickでも両端からwrapしません。
+5. Combat中の切替、Shop purchaseによる即時追加、Character Reset後の表示、Mouse drag、TouchとAttackの干渉、Idle opacity / 操作中の完全表示 / snap後fadeを確認します。Published TESTのMobile Landscapeを最終Human Gateとします。
