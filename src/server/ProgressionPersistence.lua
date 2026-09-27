@@ -107,6 +107,7 @@ function ProgressionPersistence:Save(userId: number, sessionId: string, state, r
 		local ok, record = pcall(function()
 			return self.DataStore:UpdateAsync(key, function(oldRecord)
 				transformApplied = false
+				local now = self.Now()
 				if type(oldRecord) ~= "table" then
 					transformReason = "MISSING_RECORD"
 					return nil
@@ -115,8 +116,12 @@ function ProgressionPersistence:Save(userId: number, sessionId: string, state, r
 					transformReason = "STALE_SESSION"
 					return nil
 				end
+				if type(oldRecord.SessionExpiresAt) ~= "number" or oldRecord.SessionExpiresAt <= now then
+					transformReason = "LEASE_EXPIRED"
+					return nil
+				end
 				transformApplied = true
-				local nextRecord = makeRecord(sanitized, sessionId, self.Now() + self.LeaseSeconds)
+				local nextRecord = makeRecord(sanitized, sessionId, now + self.LeaseSeconds)
 				if releaseSession then
 					nextRecord.SessionId = nil
 					nextRecord.SessionExpiresAt = nil
@@ -129,7 +134,7 @@ function ProgressionPersistence:Save(userId: number, sessionId: string, state, r
 			return true, nil
 		end
 		lastReason = if ok then transformReason or "UPDATE_CANCELLED" else tostring(record)
-		if lastReason == "STALE_SESSION" or lastReason == "MISSING_RECORD" then
+		if lastReason == "STALE_SESSION" or lastReason == "LEASE_EXPIRED" or lastReason == "MISSING_RECORD" then
 			return false, lastReason
 		end
 		if attempt < self.Attempts then

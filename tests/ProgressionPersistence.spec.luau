@@ -76,16 +76,24 @@ local store = makeStore()
 local persistence = newPersistence(store)
 local firstLoad = persistence:Load(1001, "server-A")
 assert(firstLoad.Status == "SUCCESS_NEW")
+assert(store.Records["Player_1001"].SessionExpiresAt == now + 120, "Load acquires a 120 second lease")
 local originalState = ProgressionDataRules.ApplyToState({}, firstLoad.Profile)
 assert(originalState.BestWave == 1 and originalState.EquippedWeapon == "BASEBALL_BAT")
 
+now += 45
 local sessionState = makeState()
-local saved, saveReason = persistence:Save(1001, "server-A", sessionState, true)
+local saved, saveReason = persistence:Save(1001, "server-A", sessionState, false)
 assert(saved and saveReason == nil)
+assert(store.Records["Player_1001"].SessionExpiresAt == now + 120,
+	"A valid autosave refreshes the lease for another 120 seconds")
 assert(sessionState.Level == 8 and sessionState.Coins == 740, "Save failure/success must not mutate session state")
 local savedRecord = store.Records["Player_1001"]
-assert(savedRecord.SchemaVersion == 1 and savedRecord.SessionId == nil)
+assert(savedRecord.SchemaVersion == 1 and savedRecord.SessionId == "server-A")
 assert(savedRecord.CurrentWave == nil and savedRecord.CurrentHP == nil and savedRecord.SessionKills == nil)
+
+local released, releaseReason = persistence:Save(1001, "server-A", sessionState, true)
+assert(released and releaseReason == nil, "A normal leave save releases the lease")
+assert(store.Records["Player_1001"].SessionId == nil and store.Records["Player_1001"].SessionExpiresAt == nil)
 
 now += 1
 local nextSessionLoad = persistence:Load(1001, "server-B")
@@ -97,18 +105,6 @@ assert(#nextSessionLoad.Profile.OwnedWeapons == 3)
 
 local playerBLoad = persistence:Load(1002, "server-B")
 assert(playerBLoad.Status == "SUCCESS_NEW" and playerBLoad.Profile.Coins == 0)
-
-local beforeFailureRecord = table.clone(store.Records["Player_1001"])
-store.FailuresRemaining = 3
-local failedLoad = persistence:Load(1001, "server-C")
-assert(failedLoad.Status == "FAILURE", "Load API failure must stay distinguishable from new data")
-assert(store.Records["Player_1001"] == beforeFailureRecord or store.Records["Player_1001"].SessionId == beforeFailureRecord.SessionId)
-
-local unavailableStore = makeStore()
-unavailableStore.FailuresRemaining = 3
-local failedFirstLoad = newPersistence(unavailableStore):Load(1003, "server-C")
-assert(failedFirstLoad.Status == "FAILURE" and unavailableStore.Records["Player_1003"] == nil,
-	"A failed first load must not write or finalize a default profile")
 
 store.FailuresRemaining = 3
 local saveState = makeState()
@@ -123,6 +119,40 @@ assert(playerBSaved and store.Records["Player_1002"].Coins == 25)
 assert(store.Records["Player_1001"].Level == 8 and store.Records["Player_1001"].Coins == 740,
 	"A separate player's save must not mutate this player's record")
 
+local beforeFailureRecord = table.clone(store.Records["Player_1001"])
+store.FailuresRemaining = 3
+local failedLoad = persistence:Load(1001, "server-C")
+assert(failedLoad.Status == "FAILURE", "Load API failure must stay distinguishable from new data")
+assert(store.Records["Player_1001"] == beforeFailureRecord or store.Records["Player_1001"].SessionId == beforeFailureRecord.SessionId)
+
+local unavailableStore = makeStore()
+unavailableStore.FailuresRemaining = 3
+local failedFirstLoad = newPersistence(unavailableStore):Load(1003, "server-C")
+assert(failedFirstLoad.Status == "FAILURE" and unavailableStore.Records["Player_1003"] == nil,
+	"A failed first load must not write or finalize a default profile")
+
+local playerCLoad = persistence:Load(1003, "server-C")
+assert(playerCLoad.Status == "SUCCESS_NEW")
+local playerCState = ProgressionDataRules.ApplyToState({}, playerCLoad.Profile)
+playerCState.Coins = 91
+local playerCInitialSave = persistence:Save(1003, "server-C", playerCState, false)
+assert(playerCInitialSave)
+local playerCRecord = table.clone(store.Records["Player_1003"])
+now = playerCRecord.SessionExpiresAt
+local expiredSave, expiredReason = persistence:Save(1003, "server-C", makeState(), false)
+assert(not expiredSave and expiredReason == "LEASE_EXPIRED", "The current token cannot save after its lease expires")
+assert(store.Records["Player_1003"].SessionId == playerCRecord.SessionId
+	and store.Records["Player_1003"].SessionExpiresAt == playerCRecord.SessionExpiresAt
+	and store.Records["Player_1003"].Coins == playerCRecord.Coins,
+	"Expired save must not mutate data or recreate defaults")
+local afterExpiredTakeover = persistence:Load(1003, "server-D")
+assert(afterExpiredTakeover.Status == "SUCCESS_EXISTING" and afterExpiredTakeover.Profile.Coins == 91,
+	"Another server can take over an expired lease without losing the saved profile")
+local expiredServerSaveAfterTakeover, expiredServerReason = persistence:Save(1003, "server-C", makeState(), false)
+assert(not expiredServerSaveAfterTakeover and expiredServerReason == "STALE_SESSION")
+assert(store.Records["Player_1003"].SessionId == "server-D" and store.Records["Player_1003"].Coins == 91,
+	"The expired server cannot overwrite the takeover session")
+
 now += 121
 local takeover = persistence:Load(1001, "server-D")
 assert(takeover.Status == "SUCCESS_EXISTING")
@@ -130,4 +160,4 @@ local staleSave, staleReason = persistence:Save(1001, "server-B", makeState(), f
 assert(not staleSave and staleReason == "STALE_SESSION", "An old server cannot overwrite a newer session")
 assert(store.Records["Player_1001"].SessionId == "server-D")
 
-print("PASS ProgressionPersistence: schema/defaults, sanitized round-trip, run-state exclusion, load/save failures, player isolation, and stale-session protection")
+print("PASS ProgressionPersistence: schema/defaults, sanitized round-trip, run-state exclusion, load/save failures, 120s lease expiry/renewal/release, both takeover/save race orders, player isolation, and stale-session protection")

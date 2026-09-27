@@ -328,8 +328,13 @@ def validate(place_path: str) -> None:
         'return { Status = "FAILURE", Reason = lastReason }',
         "self.DataStore:UpdateAsync(key, function(oldRecord)",
         'transformReason = "STALE_SESSION"',
+        'transformReason = "LEASE_EXPIRED"',
+        "oldRecord.SessionExpiresAt <= now",
     ):
         assert fragment in persistence_source, f"Progression persistence safety missing: {fragment}"
+    assert '(reason == "STALE_SESSION" or reason == "LEASE_EXPIRED")' in progression_service_source
+    assert 'player:SetAttribute("ProgressionReady", false)' in progression_service_source
+    assert 'player:Kick("Your progression session moved to another server. Please rejoin.")' in progression_service_source
     zombie_rules_source = source_of(server_modules["ZombieRules"])
     assert 'player:GetAttribute("ProgressionReady") ~= true' in zombie_rules_source, (
         "Zombie target selection must wait until progression loading succeeds"

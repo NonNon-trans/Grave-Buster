@@ -124,7 +124,10 @@ local function saveState(player: Player, state, sessionId: string, releaseSessio
 	end
 	if not saved then
 		warn(string.format("[Progression] Save failed for user %d: %s", player.UserId, tostring(reason)))
-		if reason == "STALE_SESSION" and player.Parent == Players and not leaving[player] then
+		if (reason == "STALE_SESSION" or reason == "LEASE_EXPIRED")
+			and player.Parent == Players and not leaving[player] then
+			ready[player] = nil
+			player:SetAttribute("ProgressionReady", false)
 			player:Kick("Your progression session moved to another server. Please rejoin.")
 		end
 		return false, reason
