@@ -151,6 +151,7 @@ function WaveService.NotifyPlayerUnavailable(player: Player)
 	resetInProgress = true
 	generation += 1
 	currentWave = 0
+	progressionService.ResetRunWaveTracking()
 	local replicatedWaveValue = waveValue
 	if replicatedWaveValue then
 		replicatedWaveValue.Value = 0
@@ -176,6 +177,7 @@ function WaveService.Start(zombieService: ZombieServiceApi, playerProgressionSer
 	generation += 1
 	zombieServiceRef = zombieService
 	progressionService = assert(playerProgressionService, "ProgressionService is required")
+	progressionService.ResetRunWaveTracking()
 	waveClearedRemote = ensureWaveClearedRemote()
 	waveValue = ensureWaveValue()
 	waveValue.Value = 0

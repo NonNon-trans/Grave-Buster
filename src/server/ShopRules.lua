@@ -2,15 +2,8 @@
 
 local ShopRules = {}
 
-function ShopRules.NewSession(shopConfig)
-	local owned = {}
-	for _, weaponId in shopConfig.DefaultOwned do
-		owned[weaponId] = true
-	end
-	return {
-		Owned = owned,
-		Revision = 0,
-	}
+local function isOwned(profile, weaponId: string): boolean
+	return table.find(profile.OwnedWeapons, weaponId) ~= nil
 end
 
 function ShopRules.ValidatePurchase(session, coins: number, weaponId: unknown, shopConfig)
@@ -21,7 +14,7 @@ function ShopRules.ValidatePurchase(session, coins: number, weaponId: unknown, s
 	if type(price) ~= "number" or price < 0 or not table.find(shopConfig.Order, weaponId) then
 		return false, "INVALID_WEAPON"
 	end
-	if session.Owned[weaponId] then
+	if isOwned(session, weaponId) then
 		return false, "ALREADY_OWNED"
 	end
 	if coins < price then
@@ -31,16 +24,15 @@ function ShopRules.ValidatePurchase(session, coins: number, weaponId: unknown, s
 end
 
 function ShopRules.GrantPurchase(session, weaponId: string)
-	assert(not session.Owned[weaponId], "Weapon must not already be owned")
-	session.Owned[weaponId] = true
-	session.Revision += 1
+	assert(not isOwned(session, weaponId), "Weapon must not already be owned")
+	table.insert(session.OwnedWeapons, weaponId)
 	return true
 end
 
 function ShopRules.GetOwnedWeapons(session, displayOrder)
 	local ordered = {}
 	for _, weaponId in displayOrder do
-		if session.Owned[weaponId] then
+		if isOwned(session, weaponId) then
 			table.insert(ordered, weaponId)
 		end
 	end

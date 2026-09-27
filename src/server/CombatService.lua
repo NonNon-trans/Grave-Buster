@@ -27,6 +27,7 @@ local shopService = nil
 local progressionService = nil
 local playerHealthService = nil
 local lastAttackAt = {}
+local progressionReadyConnections = {}
 local killCounter = KillCounter.new()
 local feedbackRemote = nil
 local damageRemote = nil
@@ -256,6 +257,9 @@ local function defeatZombie(model: Model, playerRoot: BasePart, weaponName: stri
 end
 
 local function performAttack(player: Player)
+	if not progressionService.IsReady(player) then
+		return
+	end
 	local weaponName = player:GetAttribute("EquippedWeapon")
 	local config = WeaponConfig.Get(weaponName)
 	if not config or not shopService.IsOwned(player, weaponName) then
@@ -338,20 +342,37 @@ function CombatService.Start(service, ownershipService, playerProgressionService
 	feedbackRemote = combatFeedbackRemote
 	damageRemote = zombieDamageRemote
 	local function initializePlayer(player: Player)
+		if not progressionService.IsReady(player) then
+			return
+		end
 		player:SetAttribute(KILL_ATTRIBUTE, killCounter:Ensure(player))
 		local equipped = player:GetAttribute("EquippedWeapon")
 		if not WeaponConfig.IsValid(equipped) or not shopService.IsOwned(player, equipped) then
-			player:SetAttribute("EquippedWeapon", WeaponConfig.DefaultWeapon)
+			progressionService.SetEquippedWeapon(player, WeaponConfig.DefaultWeapon)
 		end
 	end
-	for _, player in Players:GetPlayers() do
+	local function bindPlayer(player: Player)
+		if progressionReadyConnections[player] then
+			return
+		end
 		initializePlayer(player)
+		progressionReadyConnections[player] = player:GetAttributeChangedSignal("ProgressionReady"):Connect(function()
+			initializePlayer(player)
+		end)
 	end
-	Players.PlayerAdded:Connect(initializePlayer)
+	for _, player in Players:GetPlayers() do
+		bindPlayer(player)
+	end
+	Players.PlayerAdded:Connect(bindPlayer)
 	DamageConfig.Validate()
 	Players.PlayerRemoving:Connect(function(player)
 		lastAttackAt[player] = nil
 		killCounter:Remove(player)
+		local connection = progressionReadyConnections[player]
+		if connection then
+			connection:Disconnect()
+			progressionReadyConnections[player] = nil
+		end
 	end)
 	attackRemote.OnServerEvent:Connect(function(player, ...)
 		if select("#", ...) == 0 then
@@ -359,11 +380,12 @@ function CombatService.Start(service, ownershipService, playerProgressionService
 		end
 	end)
 	equipRemote.OnServerEvent:Connect(function(player, requestedWeapon, ...)
-		if select("#", ...) == 0
+		if progressionService.IsReady(player)
+			and select("#", ...) == 0
 			and type(requestedWeapon) == "string"
 			and WeaponConfig.IsValid(requestedWeapon)
 			and shopService.IsOwned(player, requestedWeapon) then
-			player:SetAttribute("EquippedWeapon", requestedWeapon)
+			progressionService.SetEquippedWeapon(player, requestedWeapon)
 		end
 	end)
 end
