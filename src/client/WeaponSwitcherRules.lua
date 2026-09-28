@@ -13,8 +13,7 @@ WeaponSwitcherRules.Tuning = table.freeze({
 	ArrowSnapDuration = 0.12,
 	FullVisibilityHold = 1.0,
 	FadeDuration = 0.3,
-	IdleBackgroundTransparency = 0.5,
-	IdleContentTransparency = 0.42,
+	IdleGroupTransparency = 0.5,
 })
 
 function WeaponSwitcherRules.ResolveCurrent(ownedWeapons, currentWeapon, fallbackWeapon)
@@ -68,6 +67,24 @@ function WeaponSwitcherRules.PositionForDrag(startIndex: number, deltaX: number,
 		return startIndex
 	end
 	return WeaponSwitcherRules.ClampPosition(startIndex - deltaX / slotWidth, count)
+end
+
+function WeaponSwitcherRules.PixelOffset(index: number, scrollPosition: number, slotWidth: number): number
+	return (index - scrollPosition) * slotWidth
+end
+
+function WeaponSwitcherRules.PointInside(
+	left: number,
+	top: number,
+	width: number,
+	height: number,
+	pointX: number,
+	pointY: number
+): boolean
+	return pointX >= left
+		and pointY >= top
+		and pointX <= left + width
+		and pointY <= top + height
 end
 
 function WeaponSwitcherRules.FlickTravel(velocityX: number, slotWidth: number): number
@@ -179,6 +196,10 @@ end
 
 function VisibilityState:GetMode()
 	return self.mode
+end
+
+function WeaponSwitcherRules.GroupTransparencyForMode(mode: string): number
+	return if mode == "Idle" then WeaponSwitcherRules.Tuning.IdleGroupTransparency else 0
 end
 
 WeaponSwitcherRules.VisibilityState = VisibilityState

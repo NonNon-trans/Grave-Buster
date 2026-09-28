@@ -17,6 +17,14 @@ assert(Rules.ArrowStep(5, 1, 5) == 5, "Right boundary clamps without wrapping")
 assert(Rules.ArrowStep(1, 1, 1) == 1, "Single-owned list remains stable")
 
 assert(Rules.PositionForDrag(3, -100, 200, 5) == 3.5, "Drag preview follows horizontal pointer movement")
+local draggedPosition = Rules.PositionForDrag(3, 10, 200, 5)
+assert(math.abs(draggedPosition - 2.95) < 0.0001, "A small pointer move produces a fractional scroll position")
+assert(math.abs(Rules.PixelOffset(3, draggedPosition, 200) - 10) < 0.0001,
+	"The card follows the pointer delta continuously in pixels")
+assert(Rules.PixelOffset(4, 3.5, 200) == 100, "Fractional preview renders between weapon slots")
+assert(Rules.PointInside(10, 20, 100, 80, 60, 50))
+assert(not Rules.PointInside(10, 20, 100, 80, 111, 50),
+	"Gesture capture is restricted to the picker center hit area")
 assert(Rules.SnapIndex(3.49, 5) == 3 and Rules.SnapIndex(3.5, 5) == 4,
 	"Release snaps to the nearest weapon position")
 assert(Rules.SnapIndex(0.2, 5) == 1 and Rules.SnapIndex(5.8, 5) == 5, "Drag snap clamps at both boundaries")
@@ -64,14 +72,23 @@ assert(commitGate:Commit(staleToken) == nil, "Interrupted snap cannot commit sta
 
 local visibility = Rules.VisibilityState.new()
 assert(visibility:GetMode() == "Idle")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5,
+	"Idle picker visibility is visibly reduced as one composited group")
 visibility:Activate()
 assert(visibility:GetMode() == "Active")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
+	"Interaction restores full group visibility immediately")
 local staleGeneration = visibility:ScheduleIdle()
 assert(visibility:GetMode() == "Hold")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
+	"Picker stays fully visible through the post-interaction hold")
 visibility:Activate()
 assert(not visibility:BeginFade(staleGeneration), "New touch cancels a pending fade")
 local generation = visibility:ScheduleIdle()
 assert(visibility:BeginFade(generation) and visibility:GetMode() == "Fade")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
+	"Fade interpolates toward idle only after the hold interval")
 assert(visibility:CompleteFade(generation) and visibility:GetMode() == "Idle")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5)
 
-print("PASS WeaponSwitcherRules: owned ordering, exact arrows, drag/snap, weak-medium-strong flick, travel clamp, boundaries, one-shot equip commit, and fade cancellation")
+print("PASS WeaponSwitcherRules: owned ordering, exact arrows, continuous pixel drag, flick/inertia, snap, boundaries, one-shot equip commit, and group opacity lifecycle")

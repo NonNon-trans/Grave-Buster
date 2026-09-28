@@ -101,6 +101,7 @@ def validate(place_path: str) -> None:
     assert "PlayerHealthHud" not in bootstrap_source, "Bootstrap still depends on the removed PlayerHealthHud"
 
     controller_source = source_of(modules["CombatController"])
+    assert "gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling" in controller_source
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
         fragment = f'script.Parent:WaitForChild("{dependency}")'
         assert fragment in controller_source, f"CombatController does not resolve {fragment}"
@@ -125,10 +126,17 @@ def validate(place_path: str) -> None:
         "Rules.ProjectFlick(",
         "Rules.FlickSnapIndex(",
         "Rules.ArrowStep(baseIndex, direction",
+        "Rules.PixelOffset(index, scrollPosition, stepWidth)",
+        "Rules.PointInside(",
+        "connect(UserInputService.TouchMoved, updateGesture)",
+        'positionValue.Name = "ScrollPosition"',
         "snapCommitGate:Commit(snapToken)",
         "requestEquip(committedIndex)",
         "RunService.Heartbeat:Connect",
         "Tuning.SnapDuration",
+        "root.GroupTransparency",
+        "Rules.GroupTransparencyForMode(mode)",
+        'Instance.new("CanvasGroup")',
     ):
         assert fragment in switcher_source, f"Momentum Weapon Switcher contract missing: {fragment}"
     assert "local Tuning = Rules.Tuning" in switcher_source
@@ -139,6 +147,10 @@ def validate(place_path: str) -> None:
         "FlickVelocityThreshold = 550",
         "Deceleration = 1800",
         "MaximumFlickTravel = 5",
+        "IdleGroupTransparency = 0.5",
+        "function WeaponSwitcherRules.PixelOffset",
+        "function WeaponSwitcherRules.PointInside",
+        "function WeaponSwitcherRules.GroupTransparencyForMode",
         "function WeaponSwitcherRules.ArrowStep",
         "function WeaponSwitcherRules.FlickTravel",
         "function WeaponSwitcherRules.FlickSnapIndex",

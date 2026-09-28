@@ -53,12 +53,13 @@ local function makeArrow(parent, name, text, position)
 end
 
 function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionRequested)
-	local root = Instance.new("Frame")
+	local root = Instance.new("CanvasGroup")
 	root.Name = "WeaponSwitcher"
 	root.AnchorPoint = Vector2.new(0.5, 1)
 	root.Position = UDim2.new(0.5, 0, 1, -12)
 	root.Size = UDim2.new(0.42, 0, 0, 74)
 	root.BackgroundColor3 = Color3.fromRGB(31, 35, 39)
+	root.GroupTransparency = Tuning.IdleGroupTransparency
 	root.BorderSizePixel = 0
 	root.Parent = parent
 	addCorner(root, 18)
@@ -94,25 +95,15 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	track.Size = UDim2.fromScale(1, 1)
 	track.Parent = center
 
-	local visualTargets = {
-		{ object = root, property = "BackgroundTransparency", idle = Tuning.IdleBackgroundTransparency, active = 0 },
-		{ object = previousButton, property = "BackgroundTransparency", idle = Tuning.IdleBackgroundTransparency, active = 0 },
-		{ object = nextButton, property = "BackgroundTransparency", idle = Tuning.IdleBackgroundTransparency, active = 0 },
-		{ object = center, property = "BackgroundTransparency", idle = Tuning.IdleBackgroundTransparency, active = 0 },
-		{ object = previousButton, property = "TextTransparency", idle = Tuning.IdleContentTransparency, active = 0 },
-		{ object = nextButton, property = "TextTransparency", idle = Tuning.IdleContentTransparency, active = 0 },
-		{ object = stroke, property = "Transparency", idle = 0.55, active = 0 },
-	}
 	local visibilityState = Rules.VisibilityState.new()
 	local snapCommitGate = Rules.SnapCommitGate.new()
-	local visibilityTweens = {}
+	local visibilityTween = nil
 	local connections = {}
 	local currentOwned = {}
 	local selectedWeapon = WeaponConfig.DefaultWeapon
 	local requestedWeapon = selectedWeapon
-	local visualPosition = 1
+	local scrollPosition = 1
 	local cardInstances = {}
-	local baseVisualTargetCount = #visualTargets
 	local dragState = Rules.DragState.new()
 	local activeDragInput = nil
 	local interactionStartPosition = 1
@@ -122,38 +113,35 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	local destroyed = false
 
 	local positionValue = Instance.new("NumberValue")
-	positionValue.Name = "PreviewPosition"
-	positionValue.Value = visualPosition
+	positionValue.Name = "ScrollPosition"
+	positionValue.Value = scrollPosition
 	positionValue.Parent = root
 
 	local function cancelVisibilityTweens()
-		for _, tween in visibilityTweens do
-			tween:Cancel()
+		if visibilityTween then
+			visibilityTween:Cancel()
+			visibilityTween = nil
 		end
-		table.clear(visibilityTweens)
 	end
 
-	local function setVisibility(useActive, duration)
+	local function setVisibility(mode, duration)
 		cancelVisibilityTweens()
-		for _, target in visualTargets do
-			local value = if useActive then target.active else target.idle
-			if duration == 0 then
-				target.object[target.property] = value
-			else
-				local tween = TweenService:Create(
-					target.object,
-					TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{ [target.property] = value }
-				)
-				table.insert(visibilityTweens, tween)
-				tween:Play()
-			end
+		local target = Rules.GroupTransparencyForMode(mode)
+		if duration == 0 then
+			root.GroupTransparency = target
+		else
+			visibilityTween = TweenService:Create(
+				root,
+				TweenInfo.new(duration, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+				{ GroupTransparency = target }
+			)
+			visibilityTween:Play()
 		end
 	end
 
 	local function activate()
 		visibilityState:Activate()
-		setVisibility(true, 0)
+		setVisibility(visibilityState:GetMode(), 0)
 	end
 
 	local function scheduleIdle()
@@ -162,7 +150,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			if destroyed or not visibilityState:BeginFade(generation) then
 				return
 			end
-			setVisibility(false, Tuning.FadeDuration)
+			setVisibility(visibilityState:GetMode(), Tuning.FadeDuration)
 			task.delay(Tuning.FadeDuration, function()
 				visibilityState:CompleteFade(generation)
 			end)
@@ -184,14 +172,16 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	end
 
 	local function renderCarousel()
-		visualPosition = Rules.ClampPosition(positionValue.Value, #currentOwned)
-		positionValue.Value = visualPosition
+		scrollPosition = Rules.ClampPosition(positionValue.Value, #currentOwned)
+		if positionValue.Value ~= scrollPosition then
+			positionValue.Value = scrollPosition
+		end
 		local width = center.AbsoluteSize.X
 		local stepWidth = width * Tuning.SlotWidthRatio
 		for index, card in cardInstances do
-			local offset = (index - visualPosition) * stepWidth
+			local offset = Rules.PixelOffset(index, scrollPosition, stepWidth)
 			card.Position = UDim2.new(0, width * 0.5 + offset, 0.5, 0)
-			local distance = math.abs(index - visualPosition)
+			local distance = math.abs(index - scrollPosition)
 			card.BackgroundColor3 = if distance < 0.18
 				then Color3.fromRGB(94, 116, 104)
 				else Color3.fromRGB(78, 87, 92)
@@ -240,7 +230,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		if destroyed or generation ~= motionGeneration then
 			return
 		end
-		visualPosition = index
+		scrollPosition = index
 		positionValue.Value = index
 		renderCarousel()
 		local committedIndex = snapCommitGate:Commit(snapToken)
@@ -267,7 +257,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			if shouldEquipAtEnd then
 				finishSnap(finalIndex, generation, snapToken)
 			else
-				visualPosition = finalIndex
+				scrollPosition = finalIndex
 				positionValue.Value = finalIndex
 				renderCarousel()
 				snapTween = nil
@@ -375,9 +365,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			card:Destroy()
 		end
 		table.clear(cardInstances)
-		for index = #visualTargets, baseVisualTargetCount + 1, -1 do
-			table.remove(visualTargets, index)
-		end
 		for index, weaponId in currentOwned do
 			local config = WeaponConfig.Get(weaponId)
 			local card = Instance.new("Frame")
@@ -402,30 +389,40 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			local weaponName = makeText(card, "WeaponName", config.DisplayName, UDim2.new(0.67, 0, 0.7, 0), UDim2.new(0.31, 0, 0.15, 0))
 			weaponName.TextXAlignment = Enum.TextXAlignment.Left
 			table.insert(cardInstances, card)
-			table.insert(visualTargets, { object = card, property = "BackgroundTransparency", idle = Tuning.IdleBackgroundTransparency, active = 0 })
-			table.insert(visualTargets, { object = icon, property = "TextTransparency", idle = Tuning.IdleContentTransparency, active = 0 })
-			table.insert(visualTargets, { object = weaponName, property = "TextTransparency", idle = Tuning.IdleContentTransparency, active = 0 })
 		end
 		renderCarousel()
 	end
 
 	connect(positionValue.Changed, renderCarousel)
-	connect(center.InputBegan, function(input)
+	local function beginGesture(input)
 		if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
 			return
 		end
-		if dragState:Begin(input, input.Position.X, input.Position.Y, os.clock(), visualPosition) then
+		local centerPosition = center.AbsolutePosition
+		local centerSize = center.AbsoluteSize
+		if not root.Visible or not Rules.PointInside(
+			centerPosition.X,
+			centerPosition.Y,
+			centerSize.X,
+			centerSize.Y,
+			input.Position.X,
+			input.Position.Y
+		) then
+			return
+		end
+		if dragState:Begin(input, input.Position.X, input.Position.Y, os.clock(), scrollPosition) then
 			cancelMotion()
 			activeDragInput = input
-			interactionStartPosition = visualPosition
+			interactionStartPosition = scrollPosition
 			activate()
 		end
-	end)
+	end
+	connect(UserInputService.InputBegan, beginGesture)
 	connect(previousButton.InputBegan, activate)
 	connect(nextButton.InputBegan, activate)
 	connect(previousButton.InputEnded, scheduleIdle)
 	connect(nextButton.InputEnded, scheduleIdle)
-	connect(UserInputService.InputChanged, function(input)
+	local function updateGesture(input)
 		if not activeDragInput then
 			return
 		end
@@ -443,10 +440,19 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			#currentOwned
 		)
 		if updated and position then
+			scrollPosition = position
 			positionValue.Value = position
 		end
+	end
+	connect(UserInputService.InputChanged, function(input)
+		if activeDragInput and activeDragInput.UserInputType == Enum.UserInputType.MouseButton1
+			and input.UserInputType == Enum.UserInputType.MouseMovement then
+			updateGesture(input)
+		end
 	end)
+	connect(UserInputService.TouchMoved, updateGesture)
 	connect(UserInputService.InputEnded, stopGesture)
+	connect(UserInputService.TouchEnded, stopGesture)
 	connect(previousButton.Activated, function()
 		requestArrow(-1)
 	end)
@@ -482,7 +488,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		end
 		local index = table.find(currentOwned, requestedWeapon) or table.find(currentOwned, resolved) or 1
 		positionValue.Value = index
-		visualPosition = index
+		scrollPosition = index
 		buildCards()
 	end
 
@@ -496,7 +502,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		local index = table.find(currentOwned, resolved) or 1
 		if not activeDragInput and not inertiaConnection and not snapTween then
 			positionValue.Value = index
-			visualPosition = index
+			scrollPosition = index
 			renderCarousel()
 		end
 	end
@@ -508,7 +514,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		local index = table.find(currentOwned, selectedWeapon)
 		if index then
 			positionValue.Value = index
-			visualPosition = index
+			scrollPosition = index
 			renderCarousel()
 		end
 		scheduleIdle()
@@ -540,7 +546,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	end
 
 	api:SetOwnedWeapons(ownedWeapons)
-	setVisibility(false, 0)
+	setVisibility("Idle", 0)
 	return api
 end
 

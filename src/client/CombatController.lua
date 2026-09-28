@@ -62,6 +62,7 @@ function CombatController.Start()
 	gui.Name = "GraveBusterCombatGui"
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	gui.ClipToDeviceSafeArea = true
 	gui.Parent = playerGui
