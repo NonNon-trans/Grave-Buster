@@ -102,6 +102,9 @@ def validate(place_path: str) -> None:
 
     controller_source = source_of(modules["CombatController"])
     assert "gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling" in controller_source
+    assert 'local PICKER_AUDIT_BUILD_ID = "GB027-PICKER-AUDIT-20260928-A"' in controller_source
+    assert "gui.DisplayOrder = if PICKER_AUDIT_BUILD_ID then 5 else 0" in controller_source
+    assert "end, PICKER_AUDIT_BUILD_ID)" in controller_source
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
         fragment = f'script.Parent:WaitForChild("{dependency}")'
         assert fragment in controller_source, f"CombatController does not resolve {fragment}"
@@ -132,6 +135,16 @@ def validate(place_path: str) -> None:
         "track.CanvasPosition = Vector2.new(Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned), 0)",
         "connect(positionValue.Changed, renderCarousel)",
         'selectionArea.Name = "FixedSelectionArea"',
+        '"GB027 PICKER AUDIT\\nBUILD " .. auditBuildId',
+        '"GB027PickerMotionDiagnostics"',
+        '"AuditCenterLine"',
+        '"AuditItemOutline"',
+        '"GB027PickerAuditBadge"',
+        "local displayWeapons = if auditMode then WeaponConfig.Order else validOwned",
+        '"POINTER X: %.1f   DELTA X: %.1f\\nCANVAS X: %.2f   SCROLL: %.4f"',
+        '"[GB027 PICKER AUDIT] build=%s owner=%s picker=%s track=%s itemCount=%d layoutCount=%d pickerCount=%d CanvasSize=%s ScrollingEnabled=%s"',
+        "local playerGui = parent.Parent or parent",
+        "if auditMode then\n\t\t\treturn false",
         "Rules.PointInside(",
         "connect(UserInputService.TouchMoved, updateGesture)",
         'positionValue.Name = "ScrollPosition"',
@@ -145,7 +158,7 @@ def validate(place_path: str) -> None:
     ):
         assert fragment in switcher_source, f"Momentum Weapon Switcher contract missing: {fragment}"
     assert "local Tuning = Rules.Tuning" in switcher_source
-    assert "Rules.OrderOwned(validOwned, WeaponConfig.Order)" in switcher_source
+    assert "Rules.OrderOwned(displayWeapons, WeaponConfig.Order)" in switcher_source
     assert "wrap" not in switcher_source.lower(), "Production Weapon Switcher must not wrap at its boundaries"
     switcher_rules_source = source_of(modules["WeaponSwitcherRules"])
     for fragment in (

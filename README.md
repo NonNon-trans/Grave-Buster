@@ -481,14 +481,15 @@ Studio / Human Gate:
 
 ## Momentum Weapon Slider（GB-027）
 
+> Human Gate investigation build only: `build/Grave-Buster-v0.2-GB027-picker-audit.rbxlx` shows an explicit audit banner and all five weapon cards regardless of ownership. Weapon equip is disabled in this diagnostic mode. Do not publish this build as production.
+
 - 左右Arrowは確定済み位置からちょうど1つ進み、端で止まります。中央pickerは全Owned Weapon itemを横向き`ScrollingFrame`内へ同時配置し、固定選択枠の下で`CanvasPosition`だけを連続移動します。画面座標でTouch / Mouse gestureを捕捉し、floating scroll positionをCanvasPositionへ変換してpointer dragへ追従します。release後のvelocityがthreshold以上なら連続慣性減速してから最寄りWeaponへsnapします。Drag / inertia中はpreviewだけを表示し、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。
 - SliderはOwned Weapon listだけを既存Weapon orderで表示します。Purchase後のlist refresh、Equipped state、DataStore ownershipは既存`OwnedWeaponSource` / `ProgressionService`を引き続き利用します。
 - Tuningは`WeaponSwitcherRules.Tuning`に集約しています。初期値はitem pitch 68% viewport幅、item width 90% of pitch、flick threshold 550 px/s、deceleration 1800 px/s²、minimum flick travel 0.85 weapon、maximum 5 weapons、snap 0.24秒です。IdleはCanvasGroup全体を50%透明にし、操作中は完全表示、snap後1秒保持して0.3秒fadeします。
 
 Human Studio / Published Mobile Check:
 
-1. `build/Grave-Buster-v0.2-GB027-picker-rework.rbxlx`をStudioで開き、複数WeaponをOwnedにしてPlayします。TEST Experienceで購入してもよいです。
-2. Arrowを連打し、各Tapが1 Weaponだけ切り替わり、最初・最後でwrapしないことを確認します。
-3. 中央pickerをゆっくり左右へdragし、Weapon列がpointerへ追従すること、release後にnearest itemへsnapすることを確認します。Flick中に通過WeaponがEquipされず、snap後のWeaponだけがEquipされることを確認します。
-4. 弱い / 中程度 / 強いFlickを試し、順に約1 / 2〜3 / 最大5 Weapon程度動き、減速してからsnapすることを確認します。強いFlickでも両端からwrapしません。
-5. Combat中の切替、Shop purchaseによる即時追加、Character Reset後の表示、Mouse drag、TouchとAttackの干渉、Idle opacity / 操作中の完全表示 / snap後fadeを確認します。Published TESTのMobile Landscapeを最終Human Gateとします。
+1. `build/Grave-Buster-v0.2-GB027-picker-audit.rbxlx`をStudioで開きます。画面上部に`GB027 PICKER AUDIT`とbuild ID `GB027-PICKER-AUDIT-20260928-A`が表示されることを最初に確認します。
+2. Magenta / Blueの診断背景、固定Yellow中央枠、item枠付きのBAT / PAN / HAMMER / BLOWER / THUNDER ROD全件が同時に存在することを確認します。この診断buildではEquipを送信しません。
+3. 中央stripをゆっくり左右へdragし、画面上の`POINTER X` / `DELTA X` / `CANVAS X` / `SCROLL`を観察します。Canvas Xが小刻みに連続変化し、複数カードが一緒に移動することを確認します。Studio Outputの`[GB027 PICKER AUDIT]`行でruntime module / GUI / track path、item数、layout数、Picker数も確認します。
+4. このbuildで連続移動を確認できた後にのみ、通常のProduction picker buildへ戻してSlow Drag / Flick / EquipのHuman Gateを行います。Published TESTのMobile Landscapeが最終Human Gateです。
