@@ -19,9 +19,12 @@ assert(Rules.ArrowStep(1, 1, 1) == 1, "Single-owned list remains stable")
 assert(Rules.PositionForDrag(3, -100, 200, 5) == 3.5, "Drag preview follows horizontal pointer movement")
 local draggedPosition = Rules.PositionForDrag(3, 10, 200, 5)
 assert(math.abs(draggedPosition - 2.95) < 0.0001, "A small pointer move produces a fractional scroll position")
-assert(math.abs(Rules.PixelOffset(3, draggedPosition, 200) - 10) < 0.0001,
-	"The card follows the pointer delta continuously in pixels")
-assert(Rules.PixelOffset(4, 3.5, 200) == 100, "Fractional preview renders between weapon slots")
+local dragStartCanvasOffset = Rules.CanvasOffset(3, 200, 5)
+assert(math.abs(Rules.CanvasOffset(draggedPosition, 200, 5) - dragStartCanvasOffset + 10) < 0.0001,
+	"A ten-pixel pointer movement produces an equal and opposite CanvasPosition movement")
+assert(Rules.CanvasOffset(3.5, 200, 5) == 500, "Fractional scroll places two items around the fixed selection area")
+assert(Rules.CanvasOffset(-4, 200, 5) == 0 and Rules.CanvasOffset(20, 200, 5) == 800,
+	"CanvasPosition is clamped to the first and last owned item")
 assert(Rules.PointInside(10, 20, 100, 80, 60, 50))
 assert(not Rules.PointInside(10, 20, 100, 80, 111, 50),
 	"Gesture capture is restricted to the picker center hit area")
@@ -86,8 +89,8 @@ visibility:Activate()
 assert(not visibility:BeginFade(staleGeneration), "New touch cancels a pending fade")
 local generation = visibility:ScheduleIdle()
 assert(visibility:BeginFade(generation) and visibility:GetMode() == "Fade")
-assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
-	"Fade interpolates toward idle only after the hold interval")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5,
+	"Fade targets the idle group transparency after the hold interval")
 assert(visibility:CompleteFade(generation) and visibility:GetMode() == "Idle")
 assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5)
 

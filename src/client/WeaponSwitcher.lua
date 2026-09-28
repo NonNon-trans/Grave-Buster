@@ -89,11 +89,39 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	center.Parent = root
 	addCorner(center, 13)
 
-	local track = Instance.new("Frame")
+	local track = Instance.new("ScrollingFrame")
 	track.Name = "WeaponTrack"
 	track.BackgroundTransparency = 1
 	track.Size = UDim2.fromScale(1, 1)
+	track.BorderSizePixel = 0
+	track.CanvasSize = UDim2.fromOffset(0, 0)
+	track.CanvasPosition = Vector2.zero
+	track.ScrollingDirection = Enum.ScrollingDirection.X
+	track.ScrollingEnabled = false
+	track.ScrollBarThickness = 0
+	track.ElasticBehavior = Enum.ElasticBehavior.Never
+	track.AutomaticCanvasSize = Enum.AutomaticSize.None
+	track.Active = false
 	track.Parent = center
+
+	local selectionArea = Instance.new("Frame")
+	selectionArea.Name = "FixedSelectionArea"
+	selectionArea.AnchorPoint = Vector2.new(0.5, 0.5)
+	selectionArea.Position = UDim2.fromScale(0.5, 0.5)
+	selectionArea.Size = UDim2.new(Tuning.SlotWidthRatio * Tuning.ItemWidthRatio, 0, 1, -8)
+	selectionArea.BackgroundTransparency = 1
+	selectionArea.BorderSizePixel = 0
+	selectionArea.Active = false
+	selectionArea.ZIndex = 5
+	selectionArea.Parent = center
+	addCorner(selectionArea, 10)
+
+	local selectionOutline = Instance.new("UIStroke")
+	selectionOutline.Name = "SelectionOutline"
+	selectionOutline.Color = Color3.fromRGB(207, 232, 209)
+	selectionOutline.Thickness = 2
+	selectionOutline.Transparency = 0.12
+	selectionOutline.Parent = selectionArea
 
 	local visibilityState = Rules.VisibilityState.new()
 	local snapCommitGate = Rules.SnapCommitGate.new()
@@ -178,16 +206,33 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		end
 		local width = center.AbsoluteSize.X
 		local stepWidth = width * Tuning.SlotWidthRatio
+		local height = math.max(1, center.AbsoluteSize.Y - 8)
+		local canvasSize = UDim2.fromOffset(width + math.max(0, #currentOwned - 1) * stepWidth, center.AbsoluteSize.Y)
+		if track.CanvasSize ~= canvasSize then
+			track.CanvasSize = canvasSize
+		end
+		track.CanvasPosition = Vector2.new(Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned), 0)
+		local itemWidth = stepWidth * Tuning.ItemWidthRatio
+		local selectionSize = UDim2.new(0, itemWidth, 1, -8)
+		if selectionArea.Size ~= selectionSize then
+			selectionArea.Size = selectionSize
+		end
 		for index, card in cardInstances do
-			local offset = Rules.PixelOffset(index, scrollPosition, stepWidth)
-			card.Position = UDim2.new(0, width * 0.5 + offset, 0.5, 0)
+			local cardSize = UDim2.fromOffset(itemWidth, height)
+			local cardPosition = UDim2.new(0, width * 0.5 + (index - 1) * stepWidth, 0.5, 0)
+			if card.Size ~= cardSize then
+				card.Size = cardSize
+			end
+			if card.Position ~= cardPosition then
+				card.Position = cardPosition
+			end
 			local distance = math.abs(index - scrollPosition)
-			card.BackgroundColor3 = if distance < 0.18
-				then Color3.fromRGB(94, 116, 104)
-				else Color3.fromRGB(78, 87, 92)
-			local strokeLine = card:FindFirstChild("SelectionOutline")
-			if strokeLine then
-				strokeLine.Transparency = if distance < 0.18 then 0 else 1
+			local focus = 1 - math.clamp(distance, 0, 1)
+			card.BackgroundColor3 = Color3.fromRGB(65, 73, 78):Lerp(Color3.fromRGB(89, 108, 98), focus * 0.45)
+			for _, descendant in card:GetDescendants() do
+				if descendant:IsA("TextLabel") then
+					descendant.TextTransparency = math.clamp(distance * 0.36, 0, 0.72)
+				end
 			end
 		end
 	end
@@ -370,23 +415,20 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			local card = Instance.new("Frame")
 			card.Name = "WeaponPreview_" .. weaponId
 			card.AnchorPoint = Vector2.new(0.5, 0.5)
-			card.Position = UDim2.new(0.5, 0, 0.5, 0)
-			card.Size = UDim2.new(Tuning.SlotWidthRatio, 0, 1, -8)
+			card.Position = UDim2.new(0, 0, 0.5, 0)
+			card.Size = UDim2.fromOffset(1, math.max(1, center.AbsoluteSize.Y - 8))
+			card.ZIndex = 1
 			card.BackgroundColor3 = Color3.fromRGB(94, 106, 111)
 			card.BackgroundTransparency = 0.05
 			card.BorderSizePixel = 0
 			card.Active = false
 			card.Parent = track
 			addCorner(card, 10)
-			local outline = Instance.new("UIStroke")
-			outline.Name = "SelectionOutline"
-			outline.Color = Color3.fromRGB(207, 232, 209)
-			outline.Thickness = 1.5
-			outline.Transparency = 1
-			outline.Parent = card
 			local icon = makeText(card, "WeaponIcon", config.IconGlyph, UDim2.new(0.26, 0, 0.62, 0), UDim2.new(0.04, 0, 0.19, 0))
+			icon.ZIndex = 2
 			icon.TextColor3 = Color3.fromRGB(208, 224, 211)
 			local weaponName = makeText(card, "WeaponName", config.DisplayName, UDim2.new(0.67, 0, 0.7, 0), UDim2.new(0.31, 0, 0.15, 0))
+			weaponName.ZIndex = 2
 			weaponName.TextXAlignment = Enum.TextXAlignment.Left
 			table.insert(cardInstances, card)
 		end

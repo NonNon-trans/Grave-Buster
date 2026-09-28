@@ -3,7 +3,8 @@
 local WeaponSwitcherRules = {}
 
 WeaponSwitcherRules.Tuning = table.freeze({
-	SlotWidthRatio = 0.72,
+	SlotWidthRatio = 0.68,
+	ItemWidthRatio = 0.9,
 	FlickVelocityThreshold = 550,
 	Deceleration = 1800,
 	MinimumFlickTravel = 0.85,
@@ -69,8 +70,8 @@ function WeaponSwitcherRules.PositionForDrag(startIndex: number, deltaX: number,
 	return WeaponSwitcherRules.ClampPosition(startIndex - deltaX / slotWidth, count)
 end
 
-function WeaponSwitcherRules.PixelOffset(index: number, scrollPosition: number, slotWidth: number): number
-	return (index - scrollPosition) * slotWidth
+function WeaponSwitcherRules.CanvasOffset(scrollPosition: number, slotWidth: number, count: number): number
+	return (WeaponSwitcherRules.ClampPosition(scrollPosition, count) - 1) * slotWidth
 end
 
 function WeaponSwitcherRules.PointInside(
@@ -199,7 +200,7 @@ function VisibilityState:GetMode()
 end
 
 function WeaponSwitcherRules.GroupTransparencyForMode(mode: string): number
-	return if mode == "Idle" then WeaponSwitcherRules.Tuning.IdleGroupTransparency else 0
+	return if mode == "Idle" or mode == "Fade" then WeaponSwitcherRules.Tuning.IdleGroupTransparency else 0
 end
 
 WeaponSwitcherRules.VisibilityState = VisibilityState
