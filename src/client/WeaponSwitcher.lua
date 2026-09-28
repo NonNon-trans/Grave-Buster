@@ -10,6 +10,7 @@ local Rules = require(script.Parent:WaitForChild("WeaponSwitcherRules"))
 local Tuning = Rules.Tuning
 
 local WeaponSwitcher = {}
+WeaponSwitcher.AuditBuildId = "GB027-SOL-AUDIT-aa2b8eb-R1"
 
 local function addCorner(parent, radius)
 	local corner = Instance.new("UICorner")

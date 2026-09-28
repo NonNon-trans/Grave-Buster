@@ -1,6 +1,7 @@
 --!strict
 
 local WeaponSwitcherRules = {}
+WeaponSwitcherRules.AuditBuildId = "GB027-SOL-AUDIT-aa2b8eb-R1"
 
 WeaponSwitcherRules.Tuning = table.freeze({
 	SlotWidthRatio = 0.68,

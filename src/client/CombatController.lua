@@ -11,6 +11,7 @@ local WeaponPresenter = require(script.Parent:WaitForChild("WeaponPresenter"))
 local WeaponSwitcher = require(script.Parent:WaitForChild("WeaponSwitcher"))
 
 local CombatController = {}
+CombatController.AuditBuildId = "GB027-SOL-AUDIT-aa2b8eb-R1"
 local player = Players.LocalPlayer
 local started = false
 local holdState = HoldState.new()
