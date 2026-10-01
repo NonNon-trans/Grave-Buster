@@ -10,7 +10,7 @@ local Rules = require(script.Parent:WaitForChild("WeaponSwitcherRules"))
 local Tuning = Rules.Tuning
 
 local WeaponSwitcher = {}
-WeaponSwitcher.AuditBuildId = "GB027-SOL-AUDIT-aa2b8eb-R1"
+WeaponSwitcher.AuditBuildId = "GB027-CENTER-ALIGNMENT-R1"
 
 local function addCorner(parent, radius)
 	local corner = Instance.new("UICorner")
@@ -112,39 +112,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	track.Active = false
 	track.Parent = center
 
-	local selectionArea = Instance.new("Frame")
-	selectionArea.Name = "FixedSelectionArea"
-	selectionArea.AnchorPoint = Vector2.new(0.5, 0.5)
-	selectionArea.Position = UDim2.fromScale(0.5, 0.5)
-	selectionArea.Size = UDim2.new(Tuning.SlotWidthRatio * Tuning.ItemWidthRatio, 0, 1, -8)
-	selectionArea.BackgroundTransparency = 1
-	selectionArea.BorderSizePixel = 0
-	selectionArea.Active = false
-	selectionArea.ZIndex = 5
-	selectionArea.Parent = center
-	addCorner(selectionArea, 10)
-
-	local selectionOutline = Instance.new("UIStroke")
-	selectionOutline.Name = "SelectionOutline"
-	selectionOutline.Color = Color3.fromRGB(207, 232, 209)
-	selectionOutline.Thickness = 2
-	selectionOutline.Transparency = 0.12
-	selectionOutline.Parent = selectionArea
-	if auditMode then
-		selectionOutline.Color = Color3.fromRGB(255, 255, 0)
-		selectionOutline.Thickness = 4
-		local centerLine = Instance.new("Frame")
-		centerLine.Name = "AuditCenterLine"
-		centerLine.AnchorPoint = Vector2.new(0.5, 0)
-		centerLine.Position = UDim2.new(0.5, 0, 0, 0)
-		centerLine.Size = UDim2.new(0, 4, 1, 0)
-		centerLine.BackgroundColor3 = Color3.fromRGB(255, 255, 0)
-		centerLine.BorderSizePixel = 0
-		centerLine.Active = false
-		centerLine.ZIndex = 10
-		centerLine.Parent = center
-	end
-
 	local auditMotionLabel = nil
 	if auditMode then
 		local auditBadge = makeText(
@@ -241,18 +208,19 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		end)
 	end
 
-	local function playSwitchFeedback()
-		local scale = center:FindFirstChildOfClass("UIScale")
-		if not scale then
-			scale = Instance.new("UIScale")
-			scale.Parent = center
-		end
-		scale.Scale = 0.94
-		TweenService:Create(scale, TweenInfo.new(0.14, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	-- Keep the viewport at a stable scale: AbsoluteSize pixels must not be
+	-- fed back into offset sizes underneath an animated UIScale.
+	local function geometry()
+		return Rules.CenterGeometry(track.AbsoluteWindowSize.X, #currentOwned)
 	end
 
 	local function slotWidth(): number
-		return math.max(1, center.AbsoluteSize.X * Tuning.SlotWidthRatio)
+		return geometry().SlotWidth
+	end
+
+	local function nearestVisibleIndex()
+		local g = geometry()
+		return Rules.NearestCenter(track.CanvasPosition.X, g, #currentOwned)
 	end
 
 	local function renderCarousel()
@@ -260,10 +228,10 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		if positionValue.Value ~= scrollPosition then
 			positionValue.Value = scrollPosition
 		end
-		local width = center.AbsoluteSize.X
-		local stepWidth = width * Tuning.SlotWidthRatio
+		local g = geometry()
+		local stepWidth = g.SlotWidth
 		local height = math.max(1, center.AbsoluteSize.Y - 8)
-		local canvasSize = UDim2.fromOffset(width + math.max(0, #currentOwned - 1) * stepWidth, center.AbsoluteSize.Y)
+		local canvasSize = UDim2.fromOffset(g.CanvasWidth, center.AbsoluteSize.Y)
 		if track.CanvasSize ~= canvasSize then
 			track.CanvasSize = canvasSize
 		end
@@ -278,13 +246,9 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			)
 		end
 		local itemWidth = stepWidth * Tuning.ItemWidthRatio
-		local selectionSize = UDim2.new(0, itemWidth, 1, -8)
-		if selectionArea.Size ~= selectionSize then
-			selectionArea.Size = selectionSize
-		end
 		for index, card in cardInstances do
 			local cardSize = UDim2.fromOffset(itemWidth, height)
-			local cardPosition = UDim2.new(0, width * 0.5 + (index - 1) * stepWidth, 0.5, 0)
+			local cardPosition = UDim2.new(0, Rules.ItemCenter(index, g), 0.5, 0)
 			if card.Size ~= cardSize then
 				card.Size = cardSize
 			end
@@ -333,9 +297,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	end
 
 	local function requestEquip(index)
-		if auditMode then
-			return false
-		end
 		local weaponId = currentOwned[index]
 		if not weaponId or weaponId == requestedWeapon then
 			return false
@@ -356,7 +317,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		if committedIndex then
 			requestEquip(committedIndex)
 		end
-		playSwitchFeedback()
 		snapTween = nil
 		scheduleIdle()
 	end
@@ -459,7 +419,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			local target = Rules.FlickSnapIndex(projected, interactionStartPosition, #currentOwned)
 			endInertia(target or projected, velocityX, currentSlotWidth)
 		else
-			snapTo(Rules.SnapIndex(positionValue.Value, #currentOwned), Tuning.SnapDuration, true)
+			snapTo(nearestVisibleIndex(), Tuning.SnapDuration, true)
 		end
 	end
 
@@ -472,10 +432,9 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			dragState:Cancel()
 			activeDragInput = nil
 		end
-		local baseIndex = Rules.SnapIndex(positionValue.Value, #currentOwned) or 1
+		local baseIndex = nearestVisibleIndex() or 1
 		local nextIndex = Rules.ArrowStep(baseIndex, direction, #currentOwned)
 		requestEquip(nextIndex)
-		playSwitchFeedback()
 		snapTo(nextIndex, Tuning.ArrowSnapDuration, false)
 	end
 
@@ -587,7 +546,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	connect(nextButton.Activated, function()
 		requestArrow(1)
 	end)
-	connect(center:GetPropertyChangedSignal("AbsoluteSize"), renderCarousel)
+	connect(track:GetPropertyChangedSignal("AbsoluteWindowSize"), renderCarousel)
 
 	local api = {}
 
@@ -598,8 +557,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 				table.insert(validOwned, weapon)
 			end
 		end
-		local displayWeapons = if auditMode then WeaponConfig.Order else validOwned
-		currentOwned = Rules.OrderOwned(displayWeapons, WeaponConfig.Order)
+		currentOwned = Rules.OrderOwned(validOwned, WeaponConfig.Order)
 		cancelMotion()
 		dragState:Cancel()
 		activeDragInput = nil

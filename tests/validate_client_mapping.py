@@ -134,17 +134,17 @@ def validate(place_path: str) -> None:
         'track.Name = "WeaponTrack"',
         "track.CanvasPosition = Vector2.new(Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned), 0)",
         "connect(positionValue.Changed, renderCarousel)",
-        'selectionArea.Name = "FixedSelectionArea"',
+        "Rules.CenterGeometry(track.AbsoluteWindowSize.X, #currentOwned)",
+        "Rules.ItemCenter(index, g)",
+        "Rules.NearestCenter(track.CanvasPosition.X, g, #currentOwned)",
         '"GB027 PICKER AUDIT\\nBUILD " .. auditBuildId',
         '"GB027PickerMotionDiagnostics"',
-        '"AuditCenterLine"',
         '"AuditItemOutline"',
         '"GB027PickerAuditBadge"',
-        "local displayWeapons = if auditMode then WeaponConfig.Order else validOwned",
+        "Rules.OrderOwned(validOwned, WeaponConfig.Order)",
         '"POINTER X: %.1f   DELTA X: %.1f\\nCANVAS X: %.2f   SCROLL: %.4f"',
         '"[GB027 PICKER AUDIT] build=%s owner=%s picker=%s track=%s itemCount=%d layoutCount=%d pickerCount=%d CanvasSize=%s ScrollingEnabled=%s"',
         "local playerGui = parent.Parent or parent",
-        "if auditMode then\n\t\t\treturn false",
         "Rules.PointInside(",
         "connect(UserInputService.TouchMoved, updateGesture)",
         'positionValue.Name = "ScrollPosition"',
@@ -158,7 +158,9 @@ def validate(place_path: str) -> None:
     ):
         assert fragment in switcher_source, f"Momentum Weapon Switcher contract missing: {fragment}"
     assert "local Tuning = Rules.Tuning" in switcher_source
-    assert "Rules.OrderOwned(displayWeapons, WeaponConfig.Order)" in switcher_source
+    assert "Rules.OrderOwned(validOwned, WeaponConfig.Order)" in switcher_source
+    for removed in ("FixedSelectionArea", "AuditCenterLine", "SelectionOutline", 'Instance.new("UIScale")'):
+        assert removed not in switcher_source, f"Removed center/scale diagnostic remains: {removed}"
     assert "wrap" not in switcher_source.lower(), "Production Weapon Switcher must not wrap at its boundaries"
     switcher_rules_source = source_of(modules["WeaponSwitcherRules"])
     for fragment in (

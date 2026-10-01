@@ -2,7 +2,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local AUDIT_BUILD_ID = "GB027-SOL-AUDIT-aa2b8eb-R1"
+local AUDIT_BUILD_ID = "GB027-CENTER-ALIGNMENT-R1"
 
 -- Temporary GB-027 delivery audit: visible even if CombatController cannot create its UI.
 local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")

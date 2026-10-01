@@ -1,7 +1,7 @@
 --!strict
 
 local WeaponSwitcherRules = {}
-WeaponSwitcherRules.AuditBuildId = "GB027-SOL-AUDIT-aa2b8eb-R1"
+WeaponSwitcherRules.AuditBuildId = "GB027-CENTER-ALIGNMENT-R1"
 
 WeaponSwitcherRules.Tuning = table.freeze({
 	SlotWidthRatio = 0.68,
@@ -69,6 +69,40 @@ function WeaponSwitcherRules.PositionForDrag(startIndex: number, deltaX: number,
 		return startIndex
 	end
 	return WeaponSwitcherRules.ClampPosition(startIndex - deltaX / slotWidth, count)
+end
+
+-- Canvas has symmetric end padding so every card center can reach the
+-- viewport center, including the first and last owned weapons.
+function WeaponSwitcherRules.CenterGeometry(viewportWidth: number, count: number)
+	local width = math.max(1, viewportWidth)
+	local slot = width * WeaponSwitcherRules.Tuning.SlotWidthRatio
+	local item = slot * WeaponSwitcherRules.Tuning.ItemWidthRatio
+	return {
+		ViewportWidth = width,
+		SlotWidth = slot,
+		ItemWidth = item,
+		EndPadding = (width - item) / 2,
+		CanvasWidth = width + math.max(0, count - 1) * slot,
+	}
+end
+
+function WeaponSwitcherRules.ItemCenter(index: number, geometry): number
+	return geometry.EndPadding + geometry.ItemWidth / 2 + (index - 1) * geometry.SlotWidth
+end
+
+function WeaponSwitcherRules.NearestCenter(canvasX: number, geometry, count: number): number?
+	local viewportCenter = canvasX + geometry.ViewportWidth / 2
+	local nearest = nil
+	local distance = math.huge
+	for index = 1, count do
+		local candidateDistance = math.abs(WeaponSwitcherRules.ItemCenter(index, geometry) - viewportCenter)
+		-- At the exact midpoint retain the existing next-item tie break.
+		if candidateDistance <= distance then
+			distance = candidateDistance
+			nearest = index
+		end
+	end
+	return nearest
 end
 
 function WeaponSwitcherRules.CanvasOffset(scrollPosition: number, slotWidth: number, count: number): number

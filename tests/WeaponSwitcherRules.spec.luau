@@ -95,3 +95,28 @@ assert(visibility:CompleteFade(generation) and visibility:GetMode() == "Idle")
 assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5)
 
 print("PASS WeaponSwitcherRules: owned ordering, exact arrows, continuous pixel drag, flick/inertia, snap, boundaries, one-shot equip commit, and group opacity lifecycle")
+
+-- Real card centers, viewport resizing, and both end padding boundaries.
+for _, width in { 138, 234, 288 } do
+	for _, count in { 1, 2, 5 } do
+		local g = Rules.CenterGeometry(width, count)
+		assert(g.EndPadding > 0)
+		for index = 1, count do
+			local canvas = Rules.CanvasOffset(index, g.SlotWidth, count)
+			assert(math.abs(Rules.ItemCenter(index, g) - canvas - width / 2) < 0.00001,
+				"Each visual card center aligns with the viewport center at snap")
+			assert(Rules.NearestCenter(canvas, g, count) == index)
+		end
+		assert(math.abs(g.CanvasWidth - width - Rules.CanvasOffset(count, g.SlotWidth, count)) < 0.00001,
+			"Last card can reach center without hitting the canvas boundary early")
+		if count >= 2 then
+			assert(Rules.NearestCenter(g.SlotWidth * 0.49, g, count) == 1)
+			assert(Rules.NearestCenter(g.SlotWidth * 0.51, g, count) == 2)
+			local before = Rules.ItemCenter(2, g) - g.SlotWidth * 0.49
+			local after = Rules.ItemCenter(2, g) - (g.SlotWidth * 0.49 + 10)
+			assert(math.abs(before - after - 10) < 0.00001, "Visual centers move continuously in pixels")
+		end
+	end
+end
+assert(Rules.NearestCenter(0, Rules.CenterGeometry(200, 0), 0) == nil)
+print("PASS center alignment: nearest visual center, responsive viewport, symmetric padding, continuous movement")
