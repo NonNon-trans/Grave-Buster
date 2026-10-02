@@ -100,7 +100,15 @@ def validate(place_path: str) -> None:
     )
     assert "PlayerHealthHud" not in bootstrap_source, "Bootstrap still depends on the removed PlayerHealthHud"
 
+    for item in root.iter("Item"):
+        if item.attrib.get("class") in ("LocalScript", "Script", "ModuleScript"):
+            generated_source = source_of(item)
+            for residue in ("GB027", "AuditBuildId", "auditBuildId", "auditMode", "diagnosticPointerX", "diagnosticDeltaX", "AuditItemOutline", "BuildAndModuleStatus"):
+                assert residue not in generated_source, f"GB-027 diagnostic residue in generated source: {residue}"
+
     controller_source = source_of(modules["CombatController"])
+    assert "gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling" in controller_source
+    assert "gui.DisplayOrder = 0" in controller_source
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
         fragment = f'script.Parent:WaitForChild("{dependency}")'
         assert fragment in controller_source, f"CombatController does not resolve {fragment}"
@@ -121,7 +129,55 @@ def validate(place_path: str) -> None:
 
     switcher_source = source_of(modules["WeaponSwitcher"])
     assert 'script.Parent:WaitForChild("WeaponSwitcherRules")' in switcher_source
-    assert "requested and requested ~= cursor" in switcher_source
+    for fragment in (
+        "Rules.ProjectFlick(",
+        "Rules.FlickSnapIndex(",
+        "Rules.ArrowStep(baseIndex, direction",
+        "Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned)",
+        'Instance.new("ScrollingFrame")',
+        'track.Name = "WeaponTrack"',
+        "track.CanvasPosition = Vector2.new(Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned), 0)",
+        "connect(positionValue.Changed, renderCarousel)",
+        "Rules.CenterGeometry(track.AbsoluteWindowSize.X, #currentOwned)",
+        "Rules.ItemCenter(index, g)",
+        "Rules.NearestCenter(track.CanvasPosition.X, g, #currentOwned)",
+        "Rules.OrderOwned(validOwned, WeaponConfig.Order)",
+        "Rules.PointInside(",
+        "connect(UserInputService.TouchMoved, updateGesture)",
+        'positionValue.Name = "ScrollPosition"',
+        "snapCommitGate:Commit(snapToken)",
+        "requestEquip(committedIndex)",
+        "RunService.Heartbeat:Connect",
+        "Tuning.SnapDuration",
+        "root.GroupTransparency",
+        "Rules.GroupTransparencyForMode(mode)",
+        'Instance.new("CanvasGroup")',
+    ):
+        assert fragment in switcher_source, f"Momentum Weapon Switcher contract missing: {fragment}"
+    assert "local Tuning = Rules.Tuning" in switcher_source
+    assert "Rules.OrderOwned(validOwned, WeaponConfig.Order)" in switcher_source
+    for removed in ("FixedSelectionArea", "AuditCenterLine", "SelectionOutline", 'Instance.new("UIScale")'):
+        assert removed not in switcher_source, f"Removed center/scale diagnostic remains: {removed}"
+    assert "wrap" not in switcher_source.lower(), "Production Weapon Switcher must not wrap at its boundaries"
+    switcher_rules_source = source_of(modules["WeaponSwitcherRules"])
+    for fragment in (
+        "FlickVelocityThreshold = 900",
+        "Deceleration = 4500",
+        "MaximumFlickTravel = 3.0",
+        "MinimumFlickTravel = 0.55",
+        "SnapDuration = 0.16",
+        "SlotWidthRatio = 0.68",
+        "ItemWidthRatio = 0.9",
+        "IdleGroupTransparency = 0.5",
+        "function WeaponSwitcherRules.CanvasOffset",
+        "function WeaponSwitcherRules.PointInside",
+        "function WeaponSwitcherRules.GroupTransparencyForMode",
+        "function WeaponSwitcherRules.ArrowStep",
+        "function WeaponSwitcherRules.FlickTravel",
+        "function WeaponSwitcherRules.FlickSnapIndex",
+        "function SnapCommitGate:Commit",
+    ):
+        assert fragment in switcher_rules_source, f"Momentum Slider tuning/rules missing: {fragment}"
     owned_source = source_of(modules["OwnedWeaponSource"])
     assert "ApplyAuthoritativeState" in owned_source
     assert "WeaponConfig.DefaultWeapon" in owned_source

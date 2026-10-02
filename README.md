@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-026 — Progression Persistence**
+現在Phase: **GB-027 — Momentum Weapon Slider**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -96,7 +96,7 @@ Grave-Buster/
 | --- | --- | --- |
 | `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Progression persistence and ownership, Shop validation, Player HP |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop / Wave / progression UI |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Momentum Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -478,3 +478,17 @@ Studio / Human Gate:
 2. Level / XP / Coinsを増やし、Weaponを購入・Equipし、Best Waveを更新してLeaveします。同じTEST ExperienceへRejoinし、それらが復元されることを確認します。
 3. RejoinごとにWave 1 / HP 100 / KILLS 0で開始し、Zombie / Run stateが引き継がれないことを確認します。Character Reset / Deathは現在のLoaded progressionを維持します。
 4. DataStore unavailableを試す場合、Studio API accessを無効にするかmock testを使います。PlayerがKickされ、既存DataをDefaultで上書きしないことを確認します。既存本番dataを使ったfailure testは行いません。
+
+## Momentum Weapon Slider（GB-027）
+
+- 左右Arrowは1 Weaponずつ切り替え、端で止まります。中央PickerはOwned Weapon itemを横向き`ScrollingFrame`内へ同時配置し、`CanvasPosition`を連続移動してTouch / Mouse Dragへ追従します。
+- Release後はvelocityに応じて慣性減速し、最寄りitemのvisual centerをviewport centerへsmooth snapします。Drag / inertia中はpreviewのみ、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。左右paddingにより最初・最後のitemも中央に揃います。
+- Purchase後のlist refresh、Equipped state、Persistenceは既存`OwnedWeaponSource` / `ProgressionService`を維持します。
+- 最終tuningは`WeaponSwitcherRules.Tuning`へ集約：item pitch 68% viewport幅、item width 90% of pitch、flick threshold 900 px/s、deceleration 4500 px/s²、minimum travel 0.55 Weapon、maximum travel 3.0 Weapon、snap 0.16秒。Idleは50%透明、操作中は完全表示、snap後1秒保持して0.3秒fadeします。
+
+Final Smoke（Published TEST / Mobile Landscape）:
+
+1. `build/Grave-Buster-v0.2-GB027-final.rbxlx`をStudioで開きます。ArtifactをPublishする際はRojoをDisconnectし、旧同期内容による上書きを避けます。
+2. Build ID、module version表示、pointer / canvas数値、診断色・枠・ログがないことを確認します。
+3. 複数Owned WeaponでSlow Dragの連続移動、center snap、Arrow 1-step、Flick、boundary停止、Opacityを確認します。
+4. Shop購入直後の追加、snap後のEquip / Attack、Character Reset、Rejoin後のEquipped復元を確認します。
