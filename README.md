@@ -481,15 +481,14 @@ Studio / Human Gate:
 
 ## Momentum Weapon Slider（GB-027）
 
-> Human Gate investigation build only: `build/Grave-Buster-v0.2-GB027-picker-audit.rbxlx` shows an explicit audit banner and all five weapon cards regardless of ownership. Weapon equip is disabled in this diagnostic mode. Do not publish this build as production.
+- 左右Arrowは1 Weaponずつ切り替え、端で止まります。中央PickerはOwned Weapon itemを横向き`ScrollingFrame`内へ同時配置し、`CanvasPosition`を連続移動してTouch / Mouse Dragへ追従します。
+- Release後はvelocityに応じて慣性減速し、最寄りitemのvisual centerをviewport centerへsmooth snapします。Drag / inertia中はpreviewのみ、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。左右paddingにより最初・最後のitemも中央に揃います。
+- Purchase後のlist refresh、Equipped state、Persistenceは既存`OwnedWeaponSource` / `ProgressionService`を維持します。
+- 最終tuningは`WeaponSwitcherRules.Tuning`へ集約：item pitch 68% viewport幅、item width 90% of pitch、flick threshold 900 px/s、deceleration 4500 px/s²、minimum travel 0.55 Weapon、maximum travel 3.0 Weapon、snap 0.16秒。Idleは50%透明、操作中は完全表示、snap後1秒保持して0.3秒fadeします。
 
-- 左右Arrowは確定済み位置からちょうど1つ進み、端で止まります。中央pickerは全Owned Weapon itemを横向き`ScrollingFrame`内へ同時配置し、固定選択枠の下で`CanvasPosition`だけを連続移動します。画面座標でTouch / Mouse gestureを捕捉し、floating scroll positionをCanvasPositionへ変換してpointer dragへ追従します。release後のvelocityがthreshold以上なら連続慣性減速してから最寄りWeaponへsnapします。Drag / inertia中はpreviewだけを表示し、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。
-- SliderはOwned Weapon listだけを既存Weapon orderで表示します。Purchase後のlist refresh、Equipped state、DataStore ownershipは既存`OwnedWeaponSource` / `ProgressionService`を引き続き利用します。
-- Tuningは`WeaponSwitcherRules.Tuning`に集約しています。初期値はitem pitch 68% viewport幅、item width 90% of pitch、flick threshold 550 px/s、deceleration 1800 px/s²、minimum flick travel 0.85 weapon、maximum 5 weapons、snap 0.24秒です。IdleはCanvasGroup全体を50%透明にし、操作中は完全表示、snap後1秒保持して0.3秒fadeします。
+Final Smoke（Published TEST / Mobile Landscape）:
 
-Human Studio / Published Mobile Check:
-
-1. `build/Grave-Buster-v0.2-GB027-picker-audit.rbxlx`をStudioで開きます。画面上部に`GB027 PICKER AUDIT`とbuild ID `GB027-PICKER-AUDIT-20260928-A`が表示されることを最初に確認します。
-2. Magenta / Blueの診断背景、固定Yellow中央枠、item枠付きのBAT / PAN / HAMMER / BLOWER / THUNDER ROD全件が同時に存在することを確認します。この診断buildではEquipを送信しません。
-3. 中央stripをゆっくり左右へdragし、画面上の`POINTER X` / `DELTA X` / `CANVAS X` / `SCROLL`を観察します。Canvas Xが小刻みに連続変化し、複数カードが一緒に移動することを確認します。Studio Outputの`[GB027 PICKER AUDIT]`行でruntime module / GUI / track path、item数、layout数、Picker数も確認します。
-4. このbuildで連続移動を確認できた後にのみ、通常のProduction picker buildへ戻してSlow Drag / Flick / EquipのHuman Gateを行います。Published TESTのMobile Landscapeが最終Human Gateです。
+1. `build/Grave-Buster-v0.2-GB027-final.rbxlx`をStudioで開きます。ArtifactをPublishする際はRojoをDisconnectし、旧同期内容による上書きを避けます。
+2. Build ID、module version表示、pointer / canvas数値、診断色・枠・ログがないことを確認します。
+3. 複数Owned WeaponでSlow Dragの連続移動、center snap、Arrow 1-step、Flick、boundary停止、Opacityを確認します。
+4. Shop購入直後の追加、snap後のEquip / Attack、Character Reset、Rejoin後のEquipped復元を確認します。

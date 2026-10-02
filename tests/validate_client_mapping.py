@@ -100,11 +100,15 @@ def validate(place_path: str) -> None:
     )
     assert "PlayerHealthHud" not in bootstrap_source, "Bootstrap still depends on the removed PlayerHealthHud"
 
+    for item in root.iter("Item"):
+        if item.attrib.get("class") in ("LocalScript", "Script", "ModuleScript"):
+            generated_source = source_of(item)
+            for residue in ("GB027", "AuditBuildId", "auditBuildId", "auditMode", "diagnosticPointerX", "diagnosticDeltaX", "AuditItemOutline", "BuildAndModuleStatus"):
+                assert residue not in generated_source, f"GB-027 diagnostic residue in generated source: {residue}"
+
     controller_source = source_of(modules["CombatController"])
     assert "gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling" in controller_source
-    assert 'local PICKER_AUDIT_BUILD_ID = "GB027-PICKER-AUDIT-20260928-A"' in controller_source
-    assert "gui.DisplayOrder = if PICKER_AUDIT_BUILD_ID then 5 else 0" in controller_source
-    assert "end, PICKER_AUDIT_BUILD_ID)" in controller_source
+    assert "gui.DisplayOrder = 0" in controller_source
     for dependency in ("HoldState", "OwnedWeaponSource", "WeaponPresenter", "WeaponSwitcher"):
         fragment = f'script.Parent:WaitForChild("{dependency}")'
         assert fragment in controller_source, f"CombatController does not resolve {fragment}"
@@ -137,14 +141,7 @@ def validate(place_path: str) -> None:
         "Rules.CenterGeometry(track.AbsoluteWindowSize.X, #currentOwned)",
         "Rules.ItemCenter(index, g)",
         "Rules.NearestCenter(track.CanvasPosition.X, g, #currentOwned)",
-        '"GB027 PICKER AUDIT\\nBUILD " .. auditBuildId',
-        '"GB027PickerMotionDiagnostics"',
-        '"AuditItemOutline"',
-        '"GB027PickerAuditBadge"',
         "Rules.OrderOwned(validOwned, WeaponConfig.Order)",
-        '"POINTER X: %.1f   DELTA X: %.1f\\nCANVAS X: %.2f   SCROLL: %.4f"',
-        '"[GB027 PICKER AUDIT] build=%s owner=%s picker=%s track=%s itemCount=%d layoutCount=%d pickerCount=%d CanvasSize=%s ScrollingEnabled=%s"',
-        "local playerGui = parent.Parent or parent",
         "Rules.PointInside(",
         "connect(UserInputService.TouchMoved, updateGesture)",
         'positionValue.Name = "ScrollPosition"',

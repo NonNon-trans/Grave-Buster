@@ -11,7 +11,6 @@ local WeaponPresenter = require(script.Parent:WaitForChild("WeaponPresenter"))
 local WeaponSwitcher = require(script.Parent:WaitForChild("WeaponSwitcher"))
 
 local CombatController = {}
-CombatController.AuditBuildId = "GB027-CENTER-ALIGNMENT-R1"
 local player = Players.LocalPlayer
 local started = false
 local holdState = HoldState.new()
@@ -19,7 +18,6 @@ local activeInput = nil
 local currentWeapon = WeaponConfig.DefaultWeapon
 local lastLocalAttack = -math.huge
 local setShopOpenImpl = nil
-local PICKER_AUDIT_BUILD_ID = "GB027-PICKER-AUDIT-20260928-A"
 
 local function makeButton(name: string, text: string, size: UDim2, position: UDim2): TextButton
 	local button = Instance.new("TextButton")
@@ -65,7 +63,7 @@ function CombatController.Start()
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	gui.DisplayOrder = if PICKER_AUDIT_BUILD_ID then 5 else 0
+	gui.DisplayOrder = 0
 	gui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets
 	gui.ClipToDeviceSafeArea = true
 	gui.Parent = playerGui
@@ -86,7 +84,7 @@ function CombatController.Start()
 	local switcher = WeaponSwitcher.Create(gui, ownedWeapons, function(requestedWeapon)
 		stopHold()
 		equipRemote:FireServer(requestedWeapon)
-	end, PICKER_AUDIT_BUILD_ID)
+	end)
 	setShopOpenImpl = function(isOpen)
 		stopHold()
 		attackButton.Visible = not isOpen

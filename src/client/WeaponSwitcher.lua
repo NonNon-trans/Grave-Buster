@@ -10,7 +10,6 @@ local Rules = require(script.Parent:WaitForChild("WeaponSwitcherRules"))
 local Tuning = Rules.Tuning
 
 local WeaponSwitcher = {}
-WeaponSwitcher.AuditBuildId = "GB027-CENTER-ALIGNMENT-R1"
 
 local function addCorner(parent, radius)
 	local corner = Instance.new("UICorner")
@@ -53,8 +52,7 @@ local function makeArrow(parent, name, text, position)
 	return button
 end
 
-function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionRequested, auditBuildId: string?)
-	local auditMode = auditBuildId ~= nil
+function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionRequested)
 	local root = Instance.new("CanvasGroup")
 	root.Name = "WeaponSwitcher"
 	root.AnchorPoint = Vector2.new(0.5, 1)
@@ -62,9 +60,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	root.Size = UDim2.new(0.42, 0, 0, 74)
 	root.BackgroundColor3 = Color3.fromRGB(31, 35, 39)
 	root.GroupTransparency = Tuning.IdleGroupTransparency
-	if auditMode then
-		root.BackgroundColor3 = Color3.fromRGB(255, 0, 190)
-	end
 	root.BorderSizePixel = 0
 	root.Parent = parent
 	addCorner(root, 18)
@@ -89,9 +84,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	center.Position = UDim2.new(0.5, 0, 0.5, 0)
 	center.AnchorPoint = Vector2.new(0.5, 0.5)
 	center.BackgroundColor3 = Color3.fromRGB(67, 73, 77)
-	if auditMode then
-		center.BackgroundColor3 = Color3.fromRGB(0, 95, 255)
-	end
 	center.Active = true
 	center.ClipsDescendants = true
 	center.Parent = root
@@ -112,37 +104,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	track.Active = false
 	track.Parent = center
 
-	local auditMotionLabel = nil
-	if auditMode then
-		local auditBadge = makeText(
-			parent,
-			"GB027PickerAuditBadge",
-			"GB027 PICKER AUDIT\nBUILD " .. auditBuildId,
-			UDim2.fromOffset(420, 48),
-			UDim2.new(0.5, 0, 0, 34)
-		)
-		auditBadge.AnchorPoint = Vector2.new(0.5, 0)
-		auditBadge.BackgroundTransparency = 0
-		auditBadge.BackgroundColor3 = Color3.fromRGB(235, 0, 150)
-		auditBadge.TextColor3 = Color3.fromRGB(255, 255, 255)
-		auditBadge.TextStrokeTransparency = 0
-		auditBadge.ZIndex = 100
-		addCorner(auditBadge, 8)
-
-		auditMotionLabel = makeText(
-			parent,
-			"GB027PickerMotionDiagnostics",
-			"POINTER X: --   DELTA X: --\nCANVAS X: --   SCROLL: --",
-			UDim2.fromOffset(440, 48),
-			UDim2.new(0.5, 0, 0, 86)
-		)
-		auditMotionLabel.AnchorPoint = Vector2.new(0.5, 0)
-		auditMotionLabel.BackgroundTransparency = 0
-		auditMotionLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-		auditMotionLabel.TextColor3 = Color3.fromRGB(190, 255, 190)
-		auditMotionLabel.ZIndex = 100
-	end
-
 	local visibilityState = Rules.VisibilityState.new()
 	local snapCommitGate = Rules.SnapCommitGate.new()
 	local visibilityTween = nil
@@ -159,9 +120,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 	local inertiaConnection = nil
 	local motionGeneration = 0
 	local destroyed = false
-	local gestureStartX = 0
-	local diagnosticPointerX = 0
-	local diagnosticDeltaX = 0
 
 	local positionValue = Instance.new("NumberValue")
 	positionValue.Name = "ScrollPosition"
@@ -236,15 +194,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			track.CanvasSize = canvasSize
 		end
 		track.CanvasPosition = Vector2.new(Rules.CanvasOffset(scrollPosition, stepWidth, #currentOwned), 0)
-		if auditMotionLabel then
-			auditMotionLabel.Text = string.format(
-				"POINTER X: %.1f   DELTA X: %.1f\nCANVAS X: %.2f   SCROLL: %.4f",
-				diagnosticPointerX,
-				diagnosticDeltaX,
-				track.CanvasPosition.X,
-				scrollPosition
-			)
-		end
 		local itemWidth = stepWidth * Tuning.ItemWidthRatio
 		for index, card in cardInstances do
 			local cardSize = UDim2.fromOffset(itemWidth, height)
@@ -257,13 +206,7 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			end
 			local distance = math.abs(index - scrollPosition)
 			local focus = 1 - math.clamp(distance, 0, 1)
-			if auditMode then
-				card.BackgroundColor3 = if index % 2 == 0
-					then Color3.fromRGB(0, 220, 255)
-					else Color3.fromRGB(255, 105, 0)
-			else
-				card.BackgroundColor3 = Color3.fromRGB(65, 73, 78):Lerp(Color3.fromRGB(89, 108, 98), focus * 0.45)
-			end
+			card.BackgroundColor3 = Color3.fromRGB(65, 73, 78):Lerp(Color3.fromRGB(89, 108, 98), focus * 0.45)
 			for _, descendant in card:GetDescendants() do
 				if descendant:IsA("TextLabel") then
 					descendant.TextTransparency = math.clamp(distance * 0.36, 0, 0.72)
@@ -457,13 +400,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			card.Active = false
 			card.Parent = track
 			addCorner(card, 10)
-			if auditMode then
-				local auditOutline = Instance.new("UIStroke")
-				auditOutline.Name = "AuditItemOutline"
-				auditOutline.Color = Color3.fromRGB(255, 255, 255)
-				auditOutline.Thickness = 3
-				auditOutline.Parent = card
-			end
 			local icon = makeText(card, "WeaponIcon", config.IconGlyph, UDim2.new(0.26, 0, 0.62, 0), UDim2.new(0.04, 0, 0.19, 0))
 			icon.ZIndex = 2
 			icon.TextColor3 = Color3.fromRGB(208, 224, 211)
@@ -496,9 +432,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 			cancelMotion()
 			activeDragInput = input
 			interactionStartPosition = scrollPosition
-			gestureStartX = input.Position.X
-			diagnosticPointerX = input.Position.X
-			diagnosticDeltaX = 0
 			activate()
 		end
 	end
@@ -526,8 +459,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 		)
 		if updated and position then
 			scrollPosition = position
-			diagnosticPointerX = input.Position.X
-			diagnosticDeltaX = diagnosticPointerX - gestureStartX
 			positionValue.Value = position
 		end
 	end
@@ -634,37 +565,6 @@ function WeaponSwitcher.Create(parent: Instance, ownedWeapons, onSelectionReques
 
 	api:SetOwnedWeapons(ownedWeapons)
 	setVisibility("Idle", 0)
-	if auditMode then
-		local itemCount = 0
-		local layoutCount = 0
-		for _, child in track:GetChildren() do
-			if child.Name:match("^WeaponPreview_") then
-				itemCount += 1
-			end
-			if child:IsA("UIListLayout") or child:IsA("UIGridLayout") then
-				layoutCount += 1
-			end
-		end
-		local pickerCount = 0
-		local playerGui = parent.Parent or parent
-		for _, descendant in playerGui:GetDescendants() do
-			if descendant.Name == "WeaponSwitcher" then
-				pickerCount += 1
-			end
-		end
-		print(string.format(
-			"[GB027 PICKER AUDIT] build=%s owner=%s picker=%s track=%s itemCount=%d layoutCount=%d pickerCount=%d CanvasSize=%s ScrollingEnabled=%s",
-			auditBuildId,
-			script:GetFullName(),
-			root:GetFullName(),
-			track:GetFullName(),
-			itemCount,
-			layoutCount,
-			pickerCount,
-			tostring(track.CanvasSize),
-			tostring(track.ScrollingEnabled)
-		))
-	end
 	return api
 end
 
