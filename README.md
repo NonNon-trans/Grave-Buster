@@ -2,7 +2,7 @@
 
 現在Version: **v0.2 development**
 
-現在Phase: **GB-027 — Momentum Weapon Slider**
+現在Phase: **GB-028 — Progression Feedback Polish / Static Gate; Human Gate pending**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -50,6 +50,8 @@ Grave-Buster/
 │   ├── client/
 │   │   ├── CombatController.lua
 │   │   ├── CombatFeedbackController.lua
+│   │   ├── FeedbackScope.lua
+│   │   ├── ProgressionFeedbackRules.lua
 │   │   ├── HoldState.lua
 │   │   ├── OwnedWeaponSource.lua
 │   │   ├── ShopController.lua
@@ -77,6 +79,7 @@ Grave-Buster/
 │   ├── HordeSimulation.spec.luau
 │   ├── KillCounter.spec.luau
 │   ├── ProgressionRules.spec.luau
+│   ├── ProgressionFeedbackRules.spec.luau
 │   ├── ProgressionSessionStore.spec.luau
 │   ├── ProgressionPersistence.spec.luau
 │   ├── ShopConfig.spec.luau
@@ -150,7 +153,7 @@ main
     └── phase/*
 ```
 
-各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
+各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。GB-028は`phase/GB-028-progression-feedback`でStatic Gateまで進め、Human Gate PASSとuser merge approvalまで停止します。
 Release時のみ`develop` → `main`へmergeします。
 GB-007の作業branchは`phase/GB-007-integration-qa`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
@@ -492,3 +495,12 @@ Final Smoke（Published TEST / Mobile Landscape）:
 2. Build ID、module version表示、pointer / canvas数値、診断色・枠・ログがないことを確認します。
 3. 複数Owned WeaponでSlow Dragの連続移動、center snap、Arrow 1-step、Flick、boundary停止、Opacityを確認します。
 4. Shop購入直後の追加、snap後のEquip / Attack、Character Reset、Rejoin後のEquipped復元を確認します。
+
+## Progression Feedback Polish（GB-028）
+
+- 数値・Server gameplay・DataStore schema/lease・GB-027 picker tuningは変更しません。Level / XP / Coins / Best Waveと現Weapon damageを左上Kills下のcompact HUDで表示します。Coins / XP counterとXP barは短くTweenし、rewardはServerの明示的grantだけを0.65秒単位に集約してHUD内へ表示します。Load / Purchase / Equipからgainを推測しません。
+- Level Up / NEW RECORD / Death→Respawnは上部の1つのnotice領域を共有し、種類ごとに最新通知を保持します。Deathは最優先、Record、Levelの順です。Shop中はProgression HUD/noticeを隠し、重要noticeをClose後へ保持します。Wave clearは既存Wave表示内に次Waveも示し、Gameplayをpauseしません。
+- Shopは購入成功時にWeapon名とTAP TO EQUIPを表示し、Cardには現在LevelでのDamageを表示します。購入のみの自動Equipは追加しません。Damage NumberはServerのAttackDamageをそのまま表示し、lethal色と小さなpopで強調します。Live Numberは24個まで、HP bar timerは個体ごとに1個へ置換します。
+- `FeedbackScope`がfeedback UIのConnection / keyed task / Tweenを所有し、GUI / Zombie削除でcleanupします。No feedback Heartbeat / gameplay wait / new Remote / external Asset。
+- Static Gate: `python3 tests/run_static_gate.py`。19 specs、60 Lua/Luau compile（40 executable + 19 specs + mock harness）、fresh Rojo build、hierarchy、全embedded source一致・compile・require依存、実embedded client modulesのmock runtime regression、source corruption検出、protected gameplay diff、`git diff --check`を確認します。これはRoblox runtime確認ではありません。
+- Human Gateには[GB-028 checklist](docs/GB-028-human-gate.md)を使用します。**Source → fresh build → source/revision一致 → Rojo Disconnect → artifactをStudioでopen → TEST ExperienceへPublish → fresh RobloxClient**。LiveSyncなし。CloudではStudio / Roblox / physical MobileはNOTRUNです。GB-029はGB-028 PASS / merge approval後のみです。

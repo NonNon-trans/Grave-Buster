@@ -2,9 +2,8 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-
 local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
+local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
 
 local WaveHud = {}
 local GUI_NAME = "GraveBusterWaveHud"
@@ -26,13 +25,16 @@ function WaveHud.Start()
 	gui.Name = GUI_NAME
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
+	gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	gui.ClipToDeviceSafeArea = true
 	gui.DisplayOrder = 1
 	gui.Parent = playerGui
+	local scope = FeedbackScope.new(gui)
 
 	local label = Instance.new("TextLabel")
 	label.Name = "WaveLabel"
 	label.AnchorPoint = Vector2.new(0.5, 0)
-	label.Position = UDim2.fromScale(0.5, 0.025)
+	label.Position = UDim2.new(0.5, 0, 0, 16)
 	label.Size = UDim2.fromOffset(184, 32)
 	label.BackgroundColor3 = Color3.fromRGB(30, 32, 30)
 	label.BackgroundTransparency = 0.35
@@ -40,6 +42,11 @@ function WaveHud.Start()
 	label.Font = Enum.Font.GothamBold
 	label.TextColor3 = Color3.fromRGB(235, 235, 228)
 	label.TextSize = 17
+	label.TextScaled = true
+	local textConstraint = Instance.new("UITextSizeConstraint")
+	textConstraint.MaxTextSize = 17
+	textConstraint.MinTextSize = 11
+	textConstraint.Parent = label
 	label.TextStrokeColor3 = Color3.fromRGB(20, 20, 20)
 	label.TextStrokeTransparency = 0.55
 	label.Parent = gui
@@ -64,34 +71,28 @@ function WaveHud.Start()
 		if activeTween then
 			activeTween:Cancel()
 		end
-		scale.Scale = 1.16
+		scale.Scale = 1.08
 		label.BackgroundTransparency = 0.08
-		task.delay(FeedbackConfig.WaveEmphasisHold, function()
+		scope:Delay("Emphasis", FeedbackConfig.WaveEmphasisHold, function()
 			if generation ~= emphasisGeneration then
 				return
 			end
-			activeTween = TweenService:Create(
-				scale,
-				TweenInfo.new(FeedbackConfig.WaveEmphasisFade, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-				{ Scale = 1 }
-			)
-			activeTween:Play()
-			TweenService:Create(
-				label,
-				TweenInfo.new(FeedbackConfig.WaveEmphasisFade),
-				{ BackgroundTransparency = 0.35 }
-			):Play()
+			activeTween = scope:Tween("Scale", scale, FeedbackConfig.WaveEmphasisFade, { Scale = 1 })
+			scope:Tween("Background", label, FeedbackConfig.WaveEmphasisFade, { BackgroundTransparency = 0.35 })
 		end)
 	end
 	local function update()
 		label.Text = if clearedWave
 			then string.format("WAVE %d CLEAR!", clearedWave)
 			else if waveValue.Value > 0 then string.format("WAVE %d", waveValue.Value) else "GET READY"
+		if clearedWave and waveValue.Value > clearedWave then
+			label.Text ..= string.format(" → %d", waveValue.Value)
+		end
 		if waveValue.Value > 0 then
 			emphasize()
 		end
 	end
-	waveCleared.OnClientEvent:Connect(function(wave: number)
+	scope:Connect(waveCleared.OnClientEvent, function(wave: number)
 		if type(wave) ~= "number" or wave < 1 then
 			return
 		end
@@ -99,7 +100,7 @@ function WaveHud.Start()
 		local generation = clearGeneration
 		clearedWave = wave
 		update()
-		task.delay(FeedbackConfig.WaveClearLifetime, function()
+		scope:Delay("Clear", FeedbackConfig.WaveClearLifetime, function()
 			if generation ~= clearGeneration or not label.Parent then
 				return
 			end
@@ -107,13 +108,14 @@ function WaveHud.Start()
 			update()
 		end)
 	end)
-	waveValue:GetPropertyChangedSignal("Value"):Connect(function()
+	scope:Connect(waveValue:GetPropertyChangedSignal("Value"), function()
 		if waveValue.Value == 0 then
 			clearGeneration += 1
 			clearedWave = nil
 		end
 		update()
 	end)
+	scope:OnDestroy(function() started = false end)
 	update()
 end
 

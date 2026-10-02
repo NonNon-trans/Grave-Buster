@@ -21,6 +21,10 @@ function ShopPresentation.FormatCurrency(currency: number): string
 	return string.format("%s: %d", ShopPresentation.CurrencyPrefix, math.floor(currency))
 end
 
+function ShopPresentation.FormatPower(damage: number, level: number): string
+	return string.format("%d DAMAGE AT LEVEL %d", damage, level)
+end
+
 function ShopPresentation.ValidateLayout(): boolean
 	local layout = ShopPresentation.Layout
 	local titleRight = layout.TitleLeft + layout.TitleWidth

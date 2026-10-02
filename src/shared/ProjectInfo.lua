@@ -2,5 +2,5 @@
 
 return {
 	Name = "Grave Buster",
-	Version = "v0.1 development",
+	Version = "v0.2 development (GB-028 feedback)",
 }

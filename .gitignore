@@ -7,3 +7,7 @@
 *.rbxlx
 *.rbxl.lock
 *.rbxlx.lock
+
+# Python static-gate caches
+__pycache__/
+*.py[cod]

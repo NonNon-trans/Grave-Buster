@@ -72,6 +72,8 @@ def validate(place_path: str) -> None:
         "WeaponPresenter",
         "WeaponSwitcher",
         "WeaponSwitcherRules",
+        "FeedbackScope",
+        "ProgressionFeedbackRules",
     ):
         modules[name] = direct_child(client, name, "ModuleScript")
     assert not any(instance_name(item) == "PlayerHealthHud" for item in client.findall("Item"))
@@ -449,9 +451,21 @@ def validate(place_path: str) -> None:
         'xpLabel.Text = string.format("%d / %d XP"',
         'levelUpLabel.Name = "LevelUpFeedback"',
         "DAMAGE +%d%%",
-        'stateChanged.OnClientEvent:Connect',
+        'scope:Connect(stateChanged.OnClientEvent',
     ):
         assert fragment in progression_hud_source, f"Progression HUD contract missing: {fragment}"
+    for fragment in (
+        '"CoinsLabel"', '"PowerLabel"', '"BestWaveLabel"', '"RewardFeedback"',
+        'Rules.AccumulateRewards(batch, snapshot)', 'Rules.Tuning.RewardWindow',
+        'Rules.PopNotice(queue)', 'function ProgressionHud.SetShopOpen',
+        'FeedbackScope.new(gui)', 'characterScope:Destroy()',
+    ):
+        assert fragment in progression_hud_source, f"GB-028 feedback contract missing: {fragment}"
+    assert 'Rules.Tuning.MaxDamageNumbers' in feedback_source
+    assert 'state.Scope:Delay("HealthBar"' in feedback_source
+    assert 'ProgressionHud.SetShopOpen(isOpen)' in shop_controller_source
+    assert 'UNLOCKED %s • TAP TO EQUIP' in shop_controller_source
+    assert 'Rules.PowerDamage(baseDamage, level)' in shop_controller_source
 
     damage_rules_source = source_of(server_modules["DamageRules"])
     for fragment in (
