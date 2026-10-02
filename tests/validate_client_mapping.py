@@ -166,9 +166,9 @@ def validate(place_path: str) -> None:
     for fragment in (
         "FlickVelocityThreshold = 900",
         "Deceleration = 4500",
-        "MaximumFlickTravel = 1.8",
+        "MaximumFlickTravel = 3.0",
         "MinimumFlickTravel = 0.55",
-        "SnapDuration = 0.24",
+        "SnapDuration = 0.16",
         "SlotWidthRatio = 0.68",
         "ItemWidthRatio = 0.9",
         "IdleGroupTransparency = 0.5",
