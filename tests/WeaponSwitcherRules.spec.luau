@@ -33,22 +33,31 @@ assert(Rules.SnapIndex(3.49, 5) == 3 and Rules.SnapIndex(3.5, 5) == 4,
 assert(Rules.SnapIndex(0.2, 5) == 1 and Rules.SnapIndex(5.8, 5) == 5, "Drag snap clamps at both boundaries")
 
 local tuning = Rules.Tuning
-local weakTravel = Rules.FlickTravel(650, 200)
+assert(tuning.SnapDuration == 0.24, "Center snap duration remains unchanged")
+assert(Rules.FlickTravel(650, 200) == 0, "Old weak flick below 700 px/s no longer triggers inertia")
+local weakTravel = Rules.FlickTravel(750, 200)
 local mediumTravel = Rules.FlickTravel(1200, 200)
 local strongTravel = Rules.FlickTravel(1800, 200)
 local maximumTravel = Rules.FlickTravel(3000, 200)
-assert(math.abs(weakTravel - 0.85) < 0.001 and Rules.SnapIndex(2 + weakTravel, 5) == 3,
+assert(math.abs(weakTravel - 0.75) < 0.001 and Rules.SnapIndex(2 + weakTravel, 5) == 3,
 	"Weak flick should travel about one weapon")
-assert(mediumTravel == 2, "Medium flick should travel about two weapons")
-assert(strongTravel >= 4 and strongTravel <= 5, "Strong flick should travel four to five weapons")
-assert(maximumTravel == tuning.MaximumFlickTravel, "Flick distance is capped")
+assert(mediumTravel >= 1 and mediumTravel <= 2, "Normal flick should travel one to two weapons")
+assert(strongTravel >= 2 and strongTravel <= 3, "Strong flick should travel two to three weapons")
+assert(maximumTravel == 3, "Strongest flick travel is capped at three weapons")
+for _, width in { 100, 150, 200 } do
+	assert(Rules.SnapIndex(2 + Rules.FlickTravel(700, width), 5) == 3, "Threshold flick snaps about one weapon onward")
+	local ordinaryStep = Rules.SnapIndex(2 + Rules.FlickTravel(1000, width), 5) - 2
+	assert(ordinaryStep >= 1 and ordinaryStep <= 2,
+		"Ordinary flick remains controllable across picker widths")
+	assert(Rules.FlickTravel(3000, width) == 3, "Maximum travel remains capped across picker widths")
+end
 assert(Rules.FlickTravel(tuning.FlickVelocityThreshold - 1, 200) == 0, "Sub-threshold motion has no inertia")
 assert(Rules.ProjectFlick(4.8, -3000, 200, 5, 3) == 5, "Flick respects right boundary")
 assert(Rules.ProjectFlick(1.2, 3000, 200, 5, 3) == 1, "Flick respects left boundary")
 assert(Rules.ProjectFlick(3, -3000, 200, 20, 3) <= 3 + tuning.MaximumFlickTravel,
 	"Flick travel is capped relative to gesture start")
 local maxSnap = Rules.FlickSnapIndex(7.8, 2.8, 20)
-assert(maxSnap == 7 and maxSnap - 2.8 <= tuning.MaximumFlickTravel,
+assert(maxSnap == 5 and maxSnap - 2.8 <= tuning.MaximumFlickTravel,
 	"Final integer snap cannot exceed maximum travel after rounding")
 
 local drag = Rules.DragState.new()
