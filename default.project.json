@@ -19,6 +19,9 @@
       "$className": "ReplicatedStorage",
       "Client": {
         "$className": "Folder",
+        "HudLayout": {
+          "$path": "src/client/HudLayout.lua"
+        },
         "FeedbackScope": {
           "$path": "src/client/FeedbackScope.lua"
         },

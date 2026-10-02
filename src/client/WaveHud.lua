@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
 local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
+local HudLayout = require(script.Parent:WaitForChild("HudLayout"))
 
 local WaveHud = {}
 local GUI_NAME = "GraveBusterWaveHud"
@@ -25,7 +26,8 @@ function WaveHud.Start()
 	gui.Name = GUI_NAME
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
-	gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	gui.ScreenInsets = Enum.ScreenInsets.TopbarSafeInsets
+	gui.SafeAreaCompatibility = Enum.SafeAreaCompatibility.None
 	gui.ClipToDeviceSafeArea = true
 	gui.DisplayOrder = 1
 	gui.Parent = playerGui
@@ -33,9 +35,12 @@ function WaveHud.Start()
 
 	local label = Instance.new("TextLabel")
 	label.Name = "WaveLabel"
-	label.AnchorPoint = Vector2.new(0.5, 0)
-	label.Position = UDim2.new(0.5, 0, 0, 16)
-	label.Size = UDim2.fromOffset(184, 32)
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	HudLayout.Watch(scope, gui, function(geometry)
+		label.Position = UDim2.fromOffset(geometry.WaveX, geometry.WaveY)
+		label.Size = UDim2.fromOffset(geometry.WaveWidth, geometry.WaveHeight)
+		label.Visible = geometry.TopbarVisible
+	end)
 	label.BackgroundColor3 = Color3.fromRGB(30, 32, 30)
 	label.BackgroundTransparency = 0.35
 	label.BorderSizePixel = 0

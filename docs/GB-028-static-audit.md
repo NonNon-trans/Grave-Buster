@@ -1,5 +1,7 @@
 # GB-028 audit and Static Gate scope
 
+The post-review HUD layout revision is documented in [GB-028 HUD layout review](GB-028-hud-layout-review.md). The prior functional Human PASS applies to `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`; the revised layout awaits a focused Human feel recheck.
+
 Verified develop: `19ef5213eaaffbe982f882374c51fb33397512fc` (live remote matched the user handoff). Initial checkout was the older main revision, with a main-only fetch refspec. Explicit fetch of develop succeeded, then phase branch was created from it with a clean tree. Public visibility was verified through connected GitHub metadata. No remote/visibility change, history rewrite or merge.
 
 No AGENTS.md, repository .agents skills, separate project mapping document or phase-plan file exists in the checked-out develop tree or supplied workspace instruction directories. README and default.project.json provided the mapping/build/phase contracts; the user's handoff is authoritative for GB-021–027 PASS and GB-028/029 gating. Older README Human Gate text is historical and does not supersede the handoff.

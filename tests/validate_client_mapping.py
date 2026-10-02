@@ -74,6 +74,7 @@ def validate(place_path: str) -> None:
         "WeaponSwitcherRules",
         "FeedbackScope",
         "ProgressionFeedbackRules",
+        "HudLayout",
     ):
         modules[name] = direct_child(client, name, "ModuleScript")
     assert not any(instance_name(item) == "PlayerHealthHud" for item in client.findall("Item"))
@@ -187,8 +188,6 @@ def validate(place_path: str) -> None:
     feedback_source = source_of(modules["CombatFeedbackController"])
     for fragment in (
         'WaitForChild("CombatFeedback")',
-        'local KILL_ATTRIBUTE = "SessionKills"',
-        "player:GetAttributeChangedSignal(KILL_ATTRIBUTE)",
         "FeedbackConfig.MaxEffectsPerAttack",
         "Debris:AddItem(trail, FeedbackConfig.TrailLifetime)",
         "Debris:AddItem(upper, FeedbackConfig.TrailLifetime)",
@@ -461,6 +460,18 @@ def validate(place_path: str) -> None:
         'FeedbackScope.new(gui)', 'characterScope:Destroy()',
     ):
         assert fragment in progression_hud_source, f"GB-028 feedback contract missing: {fragment}"
+    for fragment in ('local KILL_ATTRIBUTE = "SessionKills"', '"KillCounter"', 'player:GetAttributeChangedSignal(KILL_ATTRIBUTE)', 'HudLayout.Watch(scope, gui'):
+        assert fragment in progression_hud_source, f"Horizontal HUD contract missing: {fragment}"
+    assert '"KillCounter"' not in feedback_source, "Duplicate standalone KILLS HUD"
+    assert 'Enum.ScreenInsets.TopbarSafeInsets' in wave_hud_source
+    assert 'Enum.ScreenInsets.TopbarSafeInsets' in shop_controller_source
+    assert '"GraveBusterShopTopbarGui"' in shop_controller_source
+    for hud_source in (progression_hud_source, wave_hud_source, shop_controller_source):
+        assert 'SafeAreaCompatibility = Enum.SafeAreaCompatibility.None' in hud_source
+    layout_source = source_of(modules["HudLayout"])
+    for fragment in ('GuiService:GetInsetArea(Enum.ScreenInsets.TopbarSafeInsets)', 'GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets)', 'GetPropertyChangedSignal("TopbarInset")'):
+        assert fragment in layout_source, f"Live inset contract missing: {fragment}"
+    assert 'Heartbeat' not in layout_source
     assert 'Rules.Tuning.MaxDamageNumbers' in feedback_source
     assert 'state.Scope:Delay("HealthBar"' in feedback_source
     assert 'ProgressionHud.SetShopOpen(isOpen)' in shop_controller_source

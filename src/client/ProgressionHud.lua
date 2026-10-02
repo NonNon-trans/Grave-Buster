@@ -5,19 +5,21 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
 local Rules = require(script.Parent:WaitForChild("ProgressionFeedbackRules"))
 local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
+local HudLayout = require(script.Parent:WaitForChild("HudLayout"))
 
 local ProgressionHud = {}
 local GUI_NAME = "GraveBusterProgressionGui"
 local REMOTE_FOLDER_NAME = "ProgressionRemotes"
 local STATE_CHANGED_NAME = "StateChanged"
+local KILL_ATTRIBUTE = "SessionKills"
 local started = false
 local setShopOpenImpl = nil
 
-local function makeLabel(parent, name, y, height, textSize)
+local function makeLabel(parent, name, x, y, width, height, textSize)
 	local label = Instance.new("TextLabel")
 	label.Name = name
-	label.Position = UDim2.fromOffset(10, y)
-	label.Size = UDim2.new(1, -20, 0, height)
+	label.Position = UDim2.fromScale(x, y)
+	label.Size = UDim2.fromScale(width, height)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.TextColor3 = Color3.fromRGB(244, 242, 230)
@@ -25,6 +27,11 @@ local function makeLabel(parent, name, y, height, textSize)
 	label.TextStrokeTransparency = 0.65
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.TextSize = textSize
+	label.TextScaled = true
+	local textConstraint = Instance.new("UITextSizeConstraint")
+	textConstraint.MinTextSize = 8
+	textConstraint.MaxTextSize = textSize
+	textConstraint.Parent = label
 	label.Parent = parent
 	return label
 end
@@ -41,6 +48,7 @@ function ProgressionHud.Start()
 	gui.ResetOnSpawn = false
 	gui.IgnoreGuiInset = false
 	gui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+	gui.SafeAreaCompatibility = Enum.SafeAreaCompatibility.None
 	gui.ClipToDeviceSafeArea = true
 	gui.DisplayOrder = 2
 	gui.Parent = playerGui
@@ -54,30 +62,41 @@ function ProgressionHud.Start()
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = panel
-	local panelScale = Instance.new("UIScale")
-	panelScale.Parent = panel
-	local levelLabel = makeLabel(panel, "LevelLabel", 3, 18, 14)
+	local content = Instance.new("Frame")
+	content.Name = "ProgressionContent"
+	content.Position = UDim2.fromOffset(10, 0)
+	content.Size = UDim2.new(1, -20, 1, 0)
+	content.BackgroundTransparency = 1
+	content.Parent = panel
+	local levelLabel = makeLabel(content, "LevelLabel", 0, 0.05, 0.18, 0.30, 14)
+	local killsLabel = makeLabel(content, "KillCounter", 0.20, 0.05, 0.17, 0.30, 12)
+	local function updateKills()
+		local count = player:GetAttribute(KILL_ATTRIBUTE)
+		killsLabel.Text = string.format("KILLS %d", if type(count) == "number" then count else 0)
+	end
+	scope:Connect(player:GetAttributeChangedSignal(KILL_ATTRIBUTE), updateKills)
+	updateKills()
 	local barBackground = Instance.new("Frame")
 	barBackground.Name = "XPBarBackground"
-	barBackground.Position = UDim2.fromOffset(10, 25)
-	barBackground.Size = UDim2.new(1, -20, 0, 6)
+	barBackground.Position = UDim2.fromScale(0, 0.78)
+	barBackground.Size = UDim2.fromScale(0.44, 0.09)
 	barBackground.BackgroundColor3 = Color3.fromRGB(18, 20, 18)
 	barBackground.BorderSizePixel = 0
 	barBackground.ClipsDescendants = true
-	barBackground.Parent = panel
+	barBackground.Parent = content
 	local barFill = Instance.new("Frame")
 	barFill.Name = "XPBarFill"
 	barFill.Size = UDim2.fromScale(0, 1)
 	barFill.BackgroundColor3 = Color3.fromRGB(126, 190, 111)
 	barFill.BorderSizePixel = 0
 	barFill.Parent = barBackground
-	local xpLabel = makeLabel(panel, "XPLabel", 33, 15, 12)
-	local coinsLabel = makeLabel(panel, "CoinsLabel", 49, 17, 14)
+	local xpLabel = makeLabel(content, "XPLabel", 0, 0.39, 0.44, 0.27, 12)
+	local coinsLabel = makeLabel(content, "CoinsLabel", 0.39, 0.05, 0.28, 0.30, 14)
 	coinsLabel.TextColor3 = Color3.fromRGB(255, 225, 144)
-	local powerLabel = makeLabel(panel, "PowerLabel", 68, 14, 11)
-	local bestLabel = makeLabel(panel, "BestWaveLabel", 83, 14, 11)
+	local powerLabel = makeLabel(content, "PowerLabel", 0.48, 0.39, 0.52, 0.27, 12)
+	local bestLabel = makeLabel(content, "BestWaveLabel", 0.70, 0.05, 0.30, 0.30, 11)
 	bestLabel.TextColor3 = Color3.fromRGB(199, 208, 190)
-	local rewardLabel = makeLabel(panel, "RewardFeedback", 98, 15, 11)
+	local rewardLabel = makeLabel(content, "RewardFeedback", 0.48, 0.70, 0.52, 0.27, 11)
 	rewardLabel.TextColor3 = Color3.fromRGB(184, 233, 160)
 	rewardLabel.Text = ""
 	local levelUpLabel = Instance.new("TextLabel")
@@ -89,22 +108,22 @@ function ProgressionHud.Start()
 	levelUpLabel.TextColor3 = Color3.fromRGB(255, 242, 189)
 	levelUpLabel.TextSize = 14
 	levelUpLabel.TextWrapped = true
+	levelUpLabel.TextScaled = true
+	local noticeTextConstraint = Instance.new("UITextSizeConstraint")
+	noticeTextConstraint.MinTextSize = 9
+	noticeTextConstraint.MaxTextSize = 14
+	noticeTextConstraint.Parent = levelUpLabel
 	levelUpLabel.Visible = false
 	levelUpLabel.Parent = gui
 	local toastCorner = Instance.new("UICorner")
 	toastCorner.CornerRadius = UDim.new(0, 6)
 	toastCorner.Parent = levelUpLabel
-	local function layout()
-		if gui.AbsoluteSize.X <= 0 then return end
-		local geometry = Rules.Layout(gui.AbsoluteSize.X, gui.AbsoluteSize.Y)
+	HudLayout.Watch(scope, gui, function(geometry)
 		panel.Position = UDim2.fromOffset(geometry.PanelX, geometry.PanelY)
 		panel.Size = UDim2.fromOffset(geometry.PanelWidth, geometry.PanelHeight)
-		panelScale.Scale = geometry.PanelScale
 		levelUpLabel.Position = UDim2.fromOffset(geometry.NoticeX, geometry.NoticeY)
 		levelUpLabel.Size = UDim2.fromOffset(geometry.NoticeWidth, geometry.NoticeHeight)
-	end
-	scope:Connect(gui:GetPropertyChangedSignal("AbsoluteSize"), layout)
-	layout()
+	end)
 	local xpValue = Instance.new("NumberValue")
 	xpValue.Name = "DisplayedXP"
 	xpValue.Parent = gui

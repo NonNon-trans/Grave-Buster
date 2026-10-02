@@ -166,7 +166,15 @@ function tweenService:Create(target, info, properties)
 end
 local debris = {}
 function debris:AddItem(instance, duration) fakeTask.delay(duration, function() instance:Destroy() end) end
-local services = {Players=players, ReplicatedStorage=replicated, TweenService=tweenService, Debris=debris, RunService={Heartbeat=signal()}, UserInputService={InputEnded=signal()}}
+local guiService=newInstance("GuiService")
+local safeWidth,safeHeight,topLeft,topHeight=568,262,164,58
+local function rect(x,y,w,h) return {Min=vector(x,y),Max=vector(x+w,y+h),Width=w,Height=h} end
+function guiService:GetInsetArea(kind)
+ if kind=="TopbarSafeInsets" then return rect(topLeft,-topHeight,safeWidth-topLeft,topHeight) end
+ if kind=="DeviceSafeInsets" then return rect(0,-topHeight,safeWidth,safeHeight+topHeight) end
+ return rect(0,0,safeWidth,safeHeight)
+end
+local services = {GuiService=guiService,Players=players, ReplicatedStorage=replicated, TweenService=tweenService, Debris=debris, RunService={Heartbeat=signal()}, UserInputService={InputEnded=signal()}}
 local fakeGame = {GetService=function(self, name) return assert(services[name], name) end}
 local enums = setmetatable({}, {__index=function(self, key)
 	local category=setmetatable({}, {__index=function(category, name) rawset(category,name,name); return name end})
@@ -229,9 +237,10 @@ Hud.Start(); WaveHud.Start(); CombatFeedback.Start()
 advance(0.3)
 local gui=playerGui:WaitForChild("GraveBusterProgressionGui")
 local panel=gui:WaitForChild("ProgressionPanel")
-local reward=panel:WaitForChild("RewardFeedback")
+local content=panel:WaitForChild("ProgressionContent")
+local reward=content:WaitForChild("RewardFeedback")
 local toast=gui:WaitForChild("LevelUpFeedback")
-assert(reward.Text=="" and panel:WaitForChild("CoinsLabel").Text=="COINS 1000")
+assert(reward.Text=="" and content:WaitForChild("CoinsLabel").Text=="COINS 1000")
 local initialChildren=#gui._children
 for index=1,80 do
 	progressionRemote.OnClientEvent:Fire({Level=10,CurrentXP=20+index*5,RequiredXP=550,Coins=1000+index,BestWave=12,XPGranted=5,CoinsGranted=1})
@@ -240,13 +249,13 @@ assert(reward.Text=="" and #gui._children==initialChildren, "Per-kill GUI spam")
 assert(taskCount()<12, "Crowd created unbounded reward tasks")
 advance(0.66)
 assert(reward.Text=="+400 XP  •  +80 COINS")
-assert(panel:WaitForChild("CoinsLabel").Text=="COINS 1080")
+assert(content:WaitForChild("CoinsLabel").Text=="COINS 1080")
 progressionRemote.OnClientEvent:Fire({Level=11,CurrentXP=10,RequiredXP=600,Coins=1080,BestWave=13,LevelsGained=1,OldLevel=10,DamageIncreasePercent=5,NewRecord=true,RecordWave=13})
 assert(toast.Visible and string.find(toast.Text,"NEW RECORD",1,true))
 advance(2.21)
 assert(string.find(toast.Text,"LEVEL UP!",1,true) and string.find(toast.Text,"DAMAGE +5%",1,true))
 local shopGui=playerGui:WaitForChild("GraveBusterShopGui")
-shopGui:WaitForChild("ShopButton").Activated:Fire()
+playerGui:WaitForChild("GraveBusterShopTopbarGui"):WaitForChild("ShopButton").Activated:Fire()
 advance(0)
 assert(not panel.Visible and not toast.Visible, "Shop overlaps progression UI")
 progressionRemote.OnClientEvent:Fire({Level=11,CurrentXP=10,RequiredXP=600,Coins=1080,BestWave=14,NewRecord=true,RecordWave=14})
@@ -264,10 +273,18 @@ shopPanel:WaitForChild("WeaponList"):WaitForChild("GIANT_HAMMER").Activated:Fire
 assert(shopPanel:WaitForChild("Feedback").Text=="NOT ENOUGH COINS" and state.Currency==920 and #state.OwnedWeapons==2)
 shopPanel:WaitForChild("CloseButton").Activated:Fire()
 assert(panel.Visible and toast.Visible and string.find(toast.Text,"NEW RECORD!  WAVE 14",1,true))
-gui.AbsoluteSize=vector(844,390)
-assert(panel.Position.X.Offset==18 and toast.Position.X.Offset>=222, "Viewport resize lost safe lanes")
+safeWidth,safeHeight,topLeft,topHeight=844,326,210,64
+ guiService:GetPropertyChangedSignal("TopbarInset"):Fire()
+ gui.AbsoluteSize=vector(844,326)
+ local waveHeader=playerGui:WaitForChild("GraveBusterWaveHud"):WaitForChild("WaveLabel")
+ local shopHeader=playerGui:WaitForChild("GraveBusterShopTopbarGui"):WaitForChild("ShopButton")
+ assert(math.abs(panel.Position.X.Offset+panel.Size.X.Offset/2-(topLeft+waveHeader.Position.X.Offset))<0.001, "HUD no longer below wave center")
+ assert(waveHeader.Position.Y.Offset==shopHeader.Position.Y.Offset and panel.Size.X.Offset>panel.Size.Y.Offset*5, "Topbar/horizontal HUD layout lost")
+ player:SetAttribute("SessionKills",80)
+ assert(content:WaitForChild("KillCounter").Text=="KILLS 80")
+ assert(not playerGui:WaitForChild("GraveBusterFeedbackGui"):FindFirstChild("KillCounter"), "Duplicate KILLS")
 player:SetAttribute("PlayerLevel",11); player:SetAttribute("EquippedWeapon","FRYING_PAN")
-assert(panel:WaitForChild("PowerLabel").Text=="PAN  •  23 DMG")
+assert(content:WaitForChild("PowerLabel").Text=="PAN  •  23 DMG")
 assert(pan:WaitForChild("WeaponPower").Text=="23 DAMAGE AT LEVEL 11")
 waveClear.OnClientEvent:Fire(1); wave.Value=2
 local waveLabel=playerGui:WaitForChild("GraveBusterWaveHud"):WaitForChild("WaveLabel")
@@ -316,7 +333,7 @@ assert(connections==0 and tweenCount==0 and taskCount()==0, string.format("Feedb
 Hud.Start(); Hud.Start(); WaveHud.Start(); WaveHud.Start(); CombatFeedback.Start(); CombatFeedback.Start()
 Shop.Start({SetShopOpen=function() end}); Shop.Start({SetShopOpen=function() end})
 advance(0.3)
-assert(#playerGui._children==4)
+assert(#playerGui._children==5)
 for _, instance in table.clone(playerGui._children) do instance:Destroy() end
 advance(4)
 assert(connections==0 and tweenCount==0 and taskCount()==0)

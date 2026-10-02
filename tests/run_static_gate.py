@@ -10,11 +10,11 @@ import sys
 BASE = '19ef5213eaaffbe982f882374c51fb33397512fc'
 BRANCH = 'phase/GB-028-progression-feedback'
 parser = argparse.ArgumentParser()
-parser.add_argument('--output', default='build/gb028')
+parser.add_argument('--output', default='build/gb028-hud-topbar')
 args = parser.parse_args()
 output = Path(args.output)
 output.mkdir(parents=True, exist_ok=True)
-place = output / 'Grave-Buster-v0.2-GB028-human-gate.rbxlx'
+place = output / 'Grave-Buster-v0.2-GB028-hud-topbar.rbxlx'
 checks = []
 log = (output / 'static-gate.log').open('w')
 
@@ -52,6 +52,7 @@ try:
     run('embedded executable/source/dependency agreement', ['python3','tests/validate_source_artifact.py',place,'--report',output/'source-artifact.json'])
     run('artifact corruption regression', ['python3','tests/test_source_artifact.py',place])
     run('embedded client feedback runtime with test doubles', ['python3','tests/run_feedback_runtime.py',place])
+    run('isolated read-only Studio harness guards', ['python3','tests/test_engine_harness_guards.py'])
     run('diff whitespace', ['git','diff',BASE,'--check'])
     result = {'static_gate':'PASS','source_revision':revision,'branch':branch,'verified_develop':BASE,'spec_count':len(specs),'compile_count':len(compiled),'artifact':place.name,'artifact_sha256':hashlib.sha256(place.read_bytes()).hexdigest(),'checks':checks,'human_gate':{'Studio':'NOTRUN','published_PC':'NOTRUN','physical_Mobile_Landscape':'NOTRUN'}}
     (output/'final-static-gate.json').write_text(json.dumps(result,indent=2)+'\n')

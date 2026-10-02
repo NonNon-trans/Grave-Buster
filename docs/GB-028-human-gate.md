@@ -1,30 +1,49 @@
-# GB-028 Human Gate — user validation required
+# GB-028 HUD topbar revision — Human feel recheck
 
-Static Gate is automatic. **Studio, published Roblox PC, and physical Mobile Landscape: NOTRUN.** This cloud handoff does not certify visual feel, real remote ordering, physics, DataStore operations, or device performance. GB-028 must stay on its phase branch until you report PASS and approve merge. GB-029 has not started.
+The user reported all prior GB-028 test items PASS on revision `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`, then requested a layout change because the HUD obstructed play. That functional review is recorded; this new layout still requires Human recheck. Do not mark the new revision Human PASS or begin GB-029/merge before that report.
 
-## Delivery must be fresh
+Current revision: use `SOURCE_REVISION.txt` in the latest Library ZIP. The new artifact filename is **`Grave-Buster-v0.2-GB028-hud-topbar.rbxlx`**. Older `GB028-human-gate.rbxlx` artifacts are superseded for this recheck.
 
-1. Download and extract the new GB-028 Library ZIP into a new directory. Read `SOURCE_REVISION.txt`, `SHA256SUMS.txt`, `reports/final-static-gate.json`, and `reports/source-artifact.json`. The branch is `phase/GB-028-progression-feedback`; its parent is verified develop `19ef5213eaaffbe982f882374c51fb33397512fc`.
-2. Verify the ZIP SHA-256 supplied in the handoff. Verify the extracted files with `shasum -a 256 -c SHA256SUMS.txt` (macOS) or `sha256sum -c SHA256SUMS.txt` (Linux). The rbxlx SHA must match `reports/source-artifact.json`. `source/` contains the committed source revision, not files from another workspace.
-3. For a local source rebuild, use that exact phase SHA and Rojo 7.7.0. Build a **new** rbxlx, run `tests/validate_source_artifact.py` with Luau 0.740, and compare its hash with the packaged artifact. Do not use an old served place or a previously opened Studio tab.
-4. **Disconnect Rojo in Studio. Stop the Grave Buster Rojo serve process. No LiveSync during this Human Gate.** Open `Grave-Buster-v0.2-GB028-human-gate.rbxlx` from this ZIP in a fresh Studio window. Do not open an older GB-027 artifact.
-5. Before Play/Publish, confirm Studio contains `ReplicatedStorage.Client.FeedbackScope` and `ProgressionFeedbackRules`. Inspect `ProgressionHud.Source` for `Rules.AccumulateRewards(batch, snapshot)` and `"DisplayedCoins"`; inspect `ShopController.Source` for `UNLOCKED %s • TAP TO EQUIP`; inspect Shared.ProjectInfo for `v0.2 development (GB-028 feedback)`. The packaged audit verifies all 40 executable Sources byte-for-byte and all 64 static require edges. This Studio check ensures you opened the correct file; it does not replace that audit.
-6. Use the already authorized **TEST Experience/test universe** with its established DataStore setup. Publish this opened artifact there yourself. Do not publish production, change security settings, or use real profiles for failure injection as part of this gate. If Studio API access is unavailable, perform persistence checks in the published TEST client; do not interpret a protected load refusal as a feedback regression.
-7. Fully close existing RobloxClients, then join the newly published TEST version in a fresh PC client and a fresh physical mobile client in Landscape. Keep Rojo disconnected. If UI/source/revision disagree, verify this delivery chain first before requesting gameplay changes.
+## Fresh delivery
 
-## Focused checklist — mark PASS / FAIL per item
+1. Download the latest version of the same Library handoff, `Grave-Buster-GB028-HUD-Topbar-Human-Handoff.zip`, into a new directory. Check its supplied ZIP SHA and run `shasum -a 256 -c SHA256SUMS.txt` (Mac) or `sha256sum -c SHA256SUMS.txt` (Linux). Read `SOURCE_REVISION.txt`, `reports/final-static-gate.json` and `reports/source-artifact.json`; the source/remote revision and all embedded source hashes must agree.
+2. **Rojo Disconnect, stop the Grave Buster Rojo serve process, no LiveSync during Human Gate.** Open the new `Grave-Buster-v0.2-GB028-hud-topbar.rbxlx` in a fresh Studio window. Confirm `ReplicatedStorage.Client.HudLayout` exists; its Source uses `GuiService:GetInsetArea`. Shared.ProjectInfo must say `v0.2 development (GB-028 HUD topbar)`.
+3. Publish this exact artifact yourself to the already authorized **TEST Experience/test universe only**, with its established DataStore configuration. Do not publish production, change security settings, delete profiles or inject failure into real profiles. If Studio cannot access the existing TEST profile, use the published TEST for normal play; protected load refusal is not a HUD regression.
+4. Fully close old RobloxClients and join the fresh TEST version on **PC** and **physical Mobile Landscape**. Keep Rojo disconnected. Check delivery first if the layout/source differs.
 
-- [ ] **Startup / source:** no missing-module or other runtime errors in Studio/server/client Output. Single HUD, Shop and picker; no investigation diagnostics. Loaded Level/XP/Coins/Owned/Equipped/Best are correct with no fake reward toast on join.
-- [ ] **Kill / XP / Coins:** non-lethal hit grants nothing. Real defeats increase authoritative values; HUD counters/bar animate briefly and a compact aggregate gain appears within the left panel. Hold attack through crowds: no per-kill giant +1 COIN/+XP toast, no growing effects or blocked movement/attack.
-- [ ] **Damage / growth:** record current weapon/Level damage; level up and compare the next attack. HUD and Shop card damage match the server Damage Number, including rounding. Overkill displays full AttackDamage, not remaining HP. Non-lethal HP bar refreshes and lethal removes it. Bat/Pan/Hammer/Blower/Rod identity and knockback remain familiar.
-- [ ] **Level / record / wave:** Level Up shows old→new Level and damage increase. Exceed Best Wave: clear NEW RECORD and updated persistent Best. Trigger level/record/clear close together: notices remain readable, occupy one slot, expire, and do not pause the fight. Clear reward is counted once; the next Wave begins immediately and current Wave remains readable.
-- [ ] **Shop / purchase:** save enough Coins normally; buy a weapon. Cost is unchanged and deducted once; named UNLOCKED feedback appears with TAP TO EQUIP. Picker ownership updates immediately; purchase does not auto-equip. Tap Owned card to equip, confirm Shop/HUD/character/picker agree and attack works after Close. Failed/double purchase changes no gameplay state. Open Shop during a level/record notice and close it: the important notice appears afterward without HUD/card/header overlap.
-- [ ] **Death → retry:** die/reset solo: old zombies clear, respawn HP100 with existing protection rules, Wave 1 returns, progression/weapons/Best persist, and the retry cue feels encouraging. In multiplayer, one death preserves the survivor's run and retry cue reports the actual wave; all players dead reset the run once. No stale clear or false NEW RECORD on lower-wave retry.
-- [ ] **Picker regression:** slow drag, visual center snap, arrow 1-step, boundary stop, deliberate flick/inertia and idle opacity retain GB-027 feel. Purchase list refresh, immediate equip/attack, respawn and rejoin equipped weapon work. No momentum diagnostics.
-- [ ] **PC + smallest physical Mobile Landscape:** safe-area Kills/Wave/SHOP/left progression/notice/attack/picker are readable and do not overlap, clip or intercept movement/camera/jump. Shop masks progression/notice appropriately; close restores them. Test device rotation/viewport changes too.
-- [ ] **Crowd / cleanup:** at the existing 80-ACTIVE cap and several defeated bodies, hold attack and switch/open-close Shop; notice no material frame-rate decline. Repeat deaths and Studio Stop→Play; no extra GUI/effects/connections/errors. Damage numbers fade in 0.8 s, health bars in 1.5 s, and rewards/notices expire.
-- [ ] **Persistence smoke:** TEST Leave→fresh Rejoin restores Level/XP/Coins/Owned/Equipped/Best; new run starts at Wave1/HP100/KILLS0 with no carry-over zombies/run. Existing DataStore lease safety remains unchanged. Do not deliberately damage stored profiles.
+## Automatic checks and optional real-engine check
 
-## Report and stop
+Cloud checks cover full existing numeric/state specs, compile/build, protected gameplay sources, all executable embedded source/dependency agreement, 112 varied live-inset coordinate cases, actual embedded client code with API test doubles, reward/purchase/notice/run/picker integration, and teardown. These are automatic PASS when recorded in the reports; they do not certify Roblox engine rendering, real touch/physics/replication or device performance.
 
-Return: exact phase SHA from `SOURCE_REVISION.txt`; TEST place/version tested; PC result; physical mobile model/orientation; each checklist result; errors/screenshots or failing sequence if any. Declare **GB-028 Human Gate PASS** only after actual Roblox checks. Give merge approval separately. Until then: no develop/main merge, tag, release or GB-029.
+A read-only real-engine client check is included at `source/tests/studio/GB028HudLayoutCheck.luau`. It is deliberately **excluded from the Rojo artifact**. In the existing TEST place only, set its first `TEST_UNIVERSE_ID` value to that TEST universe's GameId, enter Studio Play and select **Client** context, then execute the file's contents in the Command Bar. It observes about 20 seconds of ordinary play and automatically checks real safe rectangles, header/HUD/control separation, field separation, Shop masking and settled server-attribute/counter/power/KILLS agreement. It prints `[GB028 TEST] PASS ...` or asserts the specific failure. Try Shop open/close and viewport/emulator resize while it observes; no manual measurement or numeric checking is needed.
+
+The check refuses Studio-external, server context, unconfigured ID and another universe. It creates no UI, sends no Remote, mutates no gameplay/profile, and disconnects its listeners at completion. Do not add it to src, save it into a production place or Publish it. Its guards are tested automatically in cloud; **real-engine execution is NOTRUN in cloud**. An unobserved event is NOTRUN, not an automatic PASS. If this check is not run, report that clearly; do not substitute the cloud test-double run for it.
+
+## Human questions — feel only
+
+- [ ] PC and physical Mobile Landscape: WAVE and SHOP feel aligned with the Roblox standard menu bar, standard buttons/notch remain usable, and the horizontal HUD feels directly under WAVE without blocking the fight. Text is legible, including on the smallest intended device and after rotation/resize.
+- [ ] During normal combat, HUD counter motion and aggregate rewards are noticeable without spam. Level Up / NEW RECORD / clear / retry messages are readable and do not distract or obscure aiming, attack or picker gestures.
+- [ ] Shop open/close and its raised button feel easy to reach; picker drag, snap, arrows and deliberate flick retain the previously passed feel. Movement, camera, jump and attack remain comfortable.
+- [ ] During a normal crowd fight, UI motion causes no noticeable performance decline. Repeat a death/retry if useful to judge whether the new top HUD still feels unobtrusive.
+
+Numeric contracts, state retention and passed functional regressions are covered by automatic tests and the unchanged gameplay source guard. Do not repeat a broad manual numbers/state checklist solely for this layout change. Never reset or damage stored TEST progression to create a case.
+
+## Report
+
+```text
+GB-028 HUD recheck
+SHA: [SOURCE_REVISION.txt]
+TEST place / published version:
+PC: [feel PASS / FAIL, environment]
+Mobile: [feel PASS / FAIL, device, Landscape]
+1 Topbar/HUD placement and readability:
+2 Feedback readability/distraction:
+3 Shop/input/picker feel:
+4 Crowd/performance feel:
+Studio read-only auto-check: PASS / FAIL / NOTRUN [paste Output]
+Unobserved cases / failures / screenshot:
+Overall new-layout Human Gate: PASS / FAIL / pending
+Merge approval: yes / no [separate decision]
+```
+
+No develop/main merge, tag/release, production Publish or GB-029 before the recheck and separate merge approval.

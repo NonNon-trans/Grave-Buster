@@ -10,6 +10,7 @@ local ShopPresentation = require(script.Parent:WaitForChild("ShopPresentation"))
 local ProgressionHud = require(script.Parent:WaitForChild("ProgressionHud"))
 local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
 local Rules = require(script.Parent:WaitForChild("ProgressionFeedbackRules"))
+local HudLayout = require(script.Parent:WaitForChild("HudLayout"))
 
 local ShopController = {}
 local player = Players.LocalPlayer
@@ -62,19 +63,37 @@ function ShopController.Start(combatController)
 	gui.DisplayOrder = 10
 	gui.Parent = playerGui
 	local scope = FeedbackScope.new(gui)
+	local shopOpen = false
+	local previousTopbar = playerGui:FindFirstChild("GraveBusterShopTopbarGui")
+	if previousTopbar then previousTopbar:Destroy() end
+	local topbarGui = Instance.new("ScreenGui")
+	topbarGui.Name = "GraveBusterShopTopbarGui"
+	topbarGui.ResetOnSpawn = false
+	topbarGui.ScreenInsets = Enum.ScreenInsets.TopbarSafeInsets
+	topbarGui.SafeAreaCompatibility = Enum.SafeAreaCompatibility.None
+	topbarGui.ClipToDeviceSafeArea = true
+	topbarGui.DisplayOrder = 10
+	topbarGui.Parent = playerGui
+	local topbarScope = FeedbackScope.new(topbarGui)
 
 	local shopButton = Instance.new("TextButton")
 	shopButton.Name = "ShopButton"
 	shopButton.Text = "SHOP"
-	shopButton.AnchorPoint = Vector2.new(1, 0)
-	shopButton.Position = UDim2.new(1, -18, 0, 16)
-	shopButton.Size = UDim2.fromOffset(112, 46)
+	shopButton.AnchorPoint = Vector2.new(0.5, 0.5)
 	shopButton.BackgroundColor3 = Color3.fromRGB(64, 72, 67)
 	shopButton.TextColor3 = Color3.fromRGB(247, 244, 226)
 	shopButton.Font = Enum.Font.GothamBold
 	shopButton.TextSize = 20
 	shopButton.ZIndex = 2
-	shopButton.Parent = gui
+	shopButton.Parent = topbarGui
+	local topbarVisible = false
+	HudLayout.Watch(topbarScope, topbarGui, function(geometry)
+		topbarVisible = geometry.TopbarVisible
+		shopButton.Position = UDim2.fromOffset(geometry.ShopX, geometry.ShopY)
+		shopButton.Size = UDim2.fromOffset(geometry.ShopWidth, geometry.ShopHeight)
+		shopButton.Visible = topbarVisible and not shopOpen
+	end)
+	shopButton.TextScaled = true
 	addCorner(shopButton, 12)
 
 	local overlay = Instance.new("TextButton")
@@ -181,7 +200,6 @@ function ShopController.Start(combatController)
 	local cards = {}
 	local pendingPurchases = {}
 	local syncing = false
-	local shopOpen = false
 	local confirmedEquipped = player:GetAttribute("EquippedWeapon")
 
 	for order, weaponId in ShopConfig.Order do
@@ -276,7 +294,7 @@ function ShopController.Start(combatController)
 	local function setOpen(isOpen)
 		shopOpen = isOpen
 		overlay.Visible = isOpen
-		shopButton.Visible = not isOpen
+		shopButton.Visible = topbarVisible and not isOpen
 		feedback.Text = ""
 		combatController.SetShopOpen(isOpen)
 		ProgressionHud.SetShopOpen(isOpen)
@@ -353,6 +371,8 @@ function ShopController.Start(combatController)
 		end
 	end)
 	scope:OnDestroy(function()
+		topbarScope:Destroy()
+		topbarGui:Destroy()
 		ProgressionHud.SetShopOpen(false)
 		combatController.SetShopOpen(false)
 		started = false

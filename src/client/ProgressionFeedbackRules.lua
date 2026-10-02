@@ -30,14 +30,35 @@ function Rules.PowerDamage(baseDamage: number, level: number): number
 	return math.round(baseDamage * (1 + 0.05 * (math.max(1, level) - 1)))
 end
 
-function Rules.Layout(width: number, height: number)
-	local panelWidth = 186
-	local noticeWidth = math.min(280, math.max(0, width - panelWidth - 54))
+function Rules.Layout(width: number, height: number, topbar, device)
+	local margin, gap = 8, 12
+	local topWidth = math.max(0, topbar.Width)
+	local topHeight = math.max(0, topbar.Height)
+	local shopWidth = math.min(112, math.max(44, topWidth * 0.3), topWidth)
+	local waveWidth = math.max(0, math.min(184, (topWidth - shopWidth - margin * 2 - gap) / 1.08))
+	local waveHalf = waveWidth * 1.08 / 2
+	local firstCenter = topbar.X + margin + waveHalf
+	local lastCenter = math.max(firstCenter, topbar.X + topWidth - shopWidth - margin - gap - waveHalf)
+	local waveCenter = math.clamp(width / 2, firstCenter, lastCenter)
+	local panelWidth = math.max(0, math.min(520, 2 * math.min(waveCenter - margin, width - margin - waveCenter)))
+	local attackLeft = device.X + device.Width - 142
+	local attackTop = device.Y + device.Height * 0.6 - 56
+	local panelHeight = math.max(0, math.min(58, attackTop - 6 - 8))
+	local noticeWidth = math.max(0, math.min(280, attackLeft - gap - margin))
+	local noticeCenter = math.clamp(waveCenter, margin + noticeWidth / 2, math.max(margin + noticeWidth / 2, attackLeft - gap - noticeWidth / 2))
+	local noticeY = 6 + panelHeight + 6
+	local pickerTop = device.Y + device.Height - 86
 	return {
-		PanelX = 18, PanelY = 58, PanelWidth = panelWidth, PanelHeight = 116,
-		NoticeX = math.clamp((width - noticeWidth) / 2, panelWidth + 36, width - noticeWidth - 18),
-		NoticeY = 68, NoticeWidth = noticeWidth, NoticeHeight = 48,
-		PanelScale = math.min(1, math.max(0.65, (height - 126) / 116)),
+		TopbarVisible = waveWidth > 0 and topHeight > 0,
+		WaveCenterX = waveCenter, WaveX = waveCenter - topbar.X,
+		WaveY = topHeight / 2, WaveWidth = waveWidth,
+		WaveHeight = math.max(0, math.min(32, (topHeight - margin) / 1.08)),
+		ShopX = topWidth - margin - shopWidth / 2, ShopY = topHeight / 2,
+		ShopWidth = shopWidth, ShopHeight = math.max(0, math.min(44, topHeight - margin)),
+		PanelX = waveCenter - panelWidth / 2, PanelY = 6,
+		PanelWidth = panelWidth, PanelHeight = panelHeight,
+		NoticeX = noticeCenter - noticeWidth / 2, NoticeY = noticeY,
+		NoticeWidth = noticeWidth, NoticeHeight = math.max(0, math.min(44, pickerTop - noticeY - margin)),
 	}
 end
 

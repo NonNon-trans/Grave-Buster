@@ -10,7 +10,6 @@ local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
 
 local CombatFeedbackController = {}
 local GUI_NAME = "GraveBusterFeedbackGui"
-local KILL_ATTRIBUTE = "SessionKills"
 local started = false
 local healthBars = {}
 local damageNumbers = {}
@@ -199,30 +198,6 @@ function CombatFeedbackController.Start()
 	gui.DisplayOrder = 2
 	gui.Parent = playerGui
 	local scope = FeedbackScope.new(gui)
-
-	local kills = Instance.new("TextLabel")
-	kills.Name = "KillCounter"
-	kills.Position = UDim2.fromOffset(18, 16)
-	kills.Size = UDim2.fromOffset(116, 36)
-	kills.BackgroundColor3 = Color3.fromRGB(30, 32, 30)
-	kills.BackgroundTransparency = 0.35
-	kills.BorderSizePixel = 0
-	kills.Font = Enum.Font.GothamBold
-	kills.TextColor3 = Color3.fromRGB(235, 235, 228)
-	kills.TextSize = 18
-	kills.TextStrokeColor3 = Color3.fromRGB(20, 20, 20)
-	kills.TextStrokeTransparency = 0.55
-	kills.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = kills
-
-	local function updateKills()
-		local count = player:GetAttribute(KILL_ATTRIBUTE)
-		kills.Text = string.format("KILLS %d", if type(count) == "number" then count else 0)
-	end
-	scope:Connect(player:GetAttributeChangedSignal(KILL_ATTRIBUTE), updateKills)
-	updateKills()
 
 	local feedbackRemote = ReplicatedStorage:WaitForChild("CombatRemotes"):WaitForChild("CombatFeedback")
 	scope:Connect(feedbackRemote.OnClientEvent, function(weaponName, roots)

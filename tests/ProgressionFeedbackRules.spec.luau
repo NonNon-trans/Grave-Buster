@@ -35,22 +35,43 @@ assert(Rules.PopNotice(queue) == nil)
 local function overlap(a, b)
 	return a[1] < b[1] + b[3] and a[1] + a[3] > b[1] and a[2] < b[2] + b[4] and a[2] + a[4] > b[2]
 end
-for _, size in { {480, 300}, {568, 320}, {667, 375}, {844, 390}, {1024, 768}, {1920, 1080} } do
-	local w, h = size[1], size[2]
-	local layout = Rules.Layout(w, h)
-	local hud = {layout.PanelX, layout.PanelY, layout.PanelWidth, layout.PanelHeight * layout.PanelScale}
-	local notice = {layout.NoticeX, layout.NoticeY, layout.NoticeWidth, layout.NoticeHeight}
-	local wave = {w / 2 - 184 * 1.08 / 2, 16, 184 * 1.08, 32 * 1.08}
-	local kills = {18, 16, 116, 36}
-	local shop = {w - 130, 16, 112, 46}
-	local attack = {w - 142, h * 0.6 - 56, 112, 112}
-	local picker = {(w - math.clamp(w * 0.42, 280, 430)) / 2, h - 86, math.clamp(w * 0.42, 280, 430), 74}
-	assert(not overlap(hud, notice))
-	for _, ui in {wave, kills, shop, attack, picker} do
-		assert(not overlap(hud, ui), string.format("HUD overlap %dx%d", w, h))
-		assert(not overlap(notice, ui), string.format("Notice overlap %dx%d", w, h))
-	end
-	assert(not overlap(wave, kills) and not overlap(wave, shop))
-	assert(notice[1] + notice[3] <= w - 18)
+local cases = 0
+for _, size in { {360, 220}, {480, 240}, {568, 262}, {667, 317}, {844, 332}, {1024, 710}, {1920, 1022} } do
+ for _, topHeight in {36, 44, 58, 64} do
+  for _, leftRatio in {0.12, 0.30, 0.48, 0.62} do
+   local w, h = size[1], size[2]
+   local left = w * leftRatio
+   local top = {X=left, Y=-topHeight, Width=w-left-8, Height=topHeight}
+   local device = {X=0, Y=-topHeight, Width=w, Height=h+topHeight}
+   local g = Rules.Layout(w,h,top,device)
+   local hud = {g.PanelX,g.PanelY,g.PanelWidth,g.PanelHeight}
+   local notice = {g.NoticeX,g.NoticeY,g.NoticeWidth,g.NoticeHeight}
+   local wave = {top.X+g.WaveX-g.WaveWidth*1.08/2, top.Y+g.WaveY-g.WaveHeight*1.08/2,g.WaveWidth*1.08,g.WaveHeight*1.08}
+   local shop = {top.X+g.ShopX-g.ShopWidth/2,top.Y+g.ShopY-g.ShopHeight/2,g.ShopWidth,g.ShopHeight}
+   local attack = {w-142,device.Y+device.Height*0.6-56,112,112}
+   local picker = {(w-math.clamp(w*0.42,280,430))/2,h-86,math.clamp(w*0.42,280,430),74}
+   if g.TopbarVisible then
+    assert(wave[1]>=top.X and wave[1]+wave[3]<=top.X+top.Width+0.001)
+    assert(shop[1]>=top.X and shop[1]+shop[3]<=top.X+top.Width+0.001)
+    assert(wave[2]>=top.Y and wave[2]+wave[4]<=0.001)
+    assert(shop[2]>=top.Y and shop[2]+shop[4]<=0.001)
+    assert(not overlap(wave,shop), "Topbar controls overlap")
+    assert(g.WaveY==g.ShopY, "Topbar vertical center differs")
+   end
+   assert(math.abs(hud[1]+hud[3]/2-g.WaveCenterX)<0.001, "HUD not directly beneath WAVE")
+   assert(hud[1]>=0 and hud[1]+hud[3]<=w)
+   assert(hud[2]==6 and hud[4]<=58, "Old double-inset/vertical HUD returned")
+   assert(hud[3]>hud[4], "HUD must be horizontal")
+   assert(not overlap(hud,notice))
+   for _, ui in {attack,picker} do
+    assert(not overlap(hud,ui), "HUD overlaps combat control")
+    assert(not overlap(notice,ui), "Notice overlaps combat control")
+   end
+   assert(notice[1]>=0 and notice[1]+notice[3]<=w)
+   cases+=1
+  end
+ end
 end
-print("PASS ProgressionFeedbackRules: 80-kill aggregation, no load/purchase gains, overflow, authoritative damage agreement, bounded notices and PC/landscape lanes")
+local startup=Rules.Layout(0,0,{X=0,Y=0,Width=0,Height=0},{X=0,Y=0,Width=0,Height=0})
+assert(not startup.TopbarVisible)
+print("PASS ProgressionFeedbackRules: 80-kill aggregation, authoritative power, bounded notices and "..cases.." live-inset layout cases with topbar/HUD/notice/control separation")
