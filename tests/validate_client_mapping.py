@@ -164,10 +164,10 @@ def validate(place_path: str) -> None:
     assert "wrap" not in switcher_source.lower(), "Production Weapon Switcher must not wrap at its boundaries"
     switcher_rules_source = source_of(modules["WeaponSwitcherRules"])
     for fragment in (
-        "FlickVelocityThreshold = 1000",
-        "Deceleration = 5500",
-        "MaximumFlickTravel = 1.4",
-        "MinimumFlickTravel = 0.45",
+        "FlickVelocityThreshold = 900",
+        "Deceleration = 4500",
+        "MaximumFlickTravel = 1.8",
+        "MinimumFlickTravel = 0.55",
         "SnapDuration = 0.24",
         "SlotWidthRatio = 0.68",
         "ItemWidthRatio = 0.9",

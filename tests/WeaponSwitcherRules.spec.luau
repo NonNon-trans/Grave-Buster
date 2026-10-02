@@ -36,20 +36,22 @@ local tuning = Rules.Tuning
 assert(tuning.SnapDuration == 0.24, "Center snap duration remains unchanged")
 assert(Rules.FlickTravel(750, 200) == 0, "Previously accepted light flick no longer triggers inertia")
 local weakTravel = Rules.FlickTravel(1100, 200)
-local mediumTravel = Rules.FlickTravel(1200, 200)
+local mediumTravel = Rules.FlickTravel(1400, 200)
 local strongTravel = Rules.FlickTravel(1800, 200)
 local maximumTravel = Rules.FlickTravel(3000, 200)
-assert(weakTravel >= 0.45 and Rules.SnapIndex(2 + weakTravel, 5) == 3,
+assert(Rules.FlickTravel(950, 200) >= 0.55, "Round 3 restores light inertia below the Round 2 threshold")
+assert(mediumTravel >= 1 and mediumTravel <= 1.5, "Reference ordinary flick travels one to 1.5 weapons")
+assert(weakTravel >= 0.55 and Rules.SnapIndex(2 + weakTravel, 5) == 3,
 	"Light flick can send about one weapon")
 assert(Rules.SnapIndex(2 + mediumTravel, 5) == 3, "Normal flick sends about one weapon")
-assert(strongTravel == 1.4 and maximumTravel == 1.4, "Strong flick cannot travel more than 1.4 weapons")
-assert(Rules.FlickTravel(1000, 300) == 0.45, "Minimum inertial travel remains a gentle fractional weapon")
+assert(strongTravel == 1.8 and maximumTravel == 1.8, "Strong flick cannot travel more than 1.8 weapons")
+assert(Rules.FlickTravel(900, 300) == 0.55, "Minimum inertial travel remains a gentle fractional weapon")
 for _, width in { 100, 150, 200 } do
-	assert(Rules.FlickTravel(999, width) == 0, "Below 1000 px/s there is no inertia")
-	assert(Rules.FlickTravel(1000, width) > 0, "Threshold starts light inertia")
-	local ordinaryStep = Rules.SnapIndex(2 + Rules.FlickTravel(1200, width), 5) - 2
+	assert(Rules.FlickTravel(899, width) == 0, "Below 900 px/s there is no inertia")
+	assert(Rules.FlickTravel(900, width) > 0, "Threshold starts light inertia")
+	local ordinaryStep = Rules.SnapIndex(2 + Rules.FlickTravel(1000, width), 5) - 2
 	assert(ordinaryStep == 1, "Ordinary flick selects about one weapon across picker widths")
-	assert(Rules.FlickTravel(3000, width) == 1.4, "Maximum travel is capped across picker widths")
+	assert(Rules.FlickTravel(3000, width) == 1.8, "Maximum travel is capped across picker widths")
 	assert(Rules.FlickSnapIndex(Rules.ProjectFlick(3, -3000, width, 5, 3), 3, 5) == 4,
 		"Hurried strong flick from the middle does not jump to the far edge")
 	assert(Rules.FlickSnapIndex(Rules.ProjectFlick(3, 3000, width, 5, 3), 3, 5) == 2,
