@@ -2,7 +2,7 @@
 """Execute the delivered Studio harness guards; reject every non-TEST context."""
 from pathlib import Path
 import subprocess,tempfile
-source=Path('tests/studio/GB028HudLayoutCheck.luau').read_text()
+source=Path('tests/studio/GB029ReleaseCandidateCheck.luau').read_text()
 for forbidden in ['DataStoreService',':FireServer(',':InvokeServer(',':SetAttribute(',':TakeDamage(', 'Instance.new(', 'ServerScriptService']:
  assert forbidden not in source, f'Unexpected mutation/dependency in read-only harness: {forbidden}'
 assert 'tests/studio' not in Path('default.project.json').read_text()

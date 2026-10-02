@@ -1,5 +1,7 @@
 # GB-028 HUD topbar revision — Human feel recheck
 
+**Historical guide, superseded by the user's version-wide completion instruction.** SHOP is now restored after the HP/CoreUI overlap review; use [v0.2 final Human Check](GB-029-final-human-check.md) and its Release Candidate artifact. The old phase stop below is retained only as review history.
+
 The user reported all prior GB-028 test items PASS on revision `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`, then requested a layout change because the HUD obstructed play. That functional review is recorded; this new layout still requires Human recheck. Do not mark the new revision Human PASS or begin GB-029/merge before that report.
 
 Current revision: use `SOURCE_REVISION.txt` in the latest Library ZIP. The new artifact filename is **`Grave-Buster-v0.2-GB028-hud-topbar.rbxlx`**. Older `GB028-human-gate.rbxlx` artifacts are superseded for this recheck.

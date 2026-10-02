@@ -464,9 +464,10 @@ def validate(place_path: str) -> None:
         assert fragment in progression_hud_source, f"Horizontal HUD contract missing: {fragment}"
     assert '"KillCounter"' not in feedback_source, "Duplicate standalone KILLS HUD"
     assert 'Enum.ScreenInsets.TopbarSafeInsets' in wave_hud_source
-    assert 'Enum.ScreenInsets.TopbarSafeInsets' in shop_controller_source
-    assert '"GraveBusterShopTopbarGui"' in shop_controller_source
-    for hud_source in (progression_hud_source, wave_hud_source, shop_controller_source):
+    for fragment in ('Enum.ScreenInsets.CoreUISafeInsets', 'shopButton.AnchorPoint = Vector2.new(1, 0)', 'shopButton.Position = UDim2.new(1, -18, 0, 16)', 'shopButton.Size = UDim2.fromOffset(112, 46)', 'shopButton.Parent = gui'):
+        assert fragment in shop_controller_source, f'Restored SHOP contract missing: {fragment}'
+    assert 'GraveBusterShopTopbarGui' not in shop_controller_source
+    for hud_source in (progression_hud_source, wave_hud_source):
         assert 'SafeAreaCompatibility = Enum.SafeAreaCompatibility.None' in hud_source
     layout_source = source_of(modules["HudLayout"])
     for fragment in ('GuiService:GetInsetArea(Enum.ScreenInsets.TopbarSafeInsets)', 'GuiService:GetInsetArea(Enum.ScreenInsets.DeviceSafeInsets)', 'GetPropertyChangedSignal("TopbarInset")'):

@@ -1,8 +1,8 @@
 # Grave Buster
 
-現在Version: **v0.2 development**
+現在Version: **v0.2 Release Candidate**
 
-現在Phase: **GB-028 — Progression Feedback Polish / Static Gate; Human Gate pending**
+現在Phase: **GB-029 — version-wide integrated regression / final Human pending**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -16,7 +16,7 @@ Combat result、Zombie lifecycle、Wave progression、Player Progression、Weapo
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-Roblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、標準topbarの空き領域にWAVEとSHOP、WAVE直下の横長HUDにProgression / Killsを置きます。
+Roblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、標準topbarの空き領域にWAVE、CoreUI下の従来右上位置にSHOP、WAVE下の横長HUDにProgression / Killsを置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
@@ -154,7 +154,7 @@ main
     └── phase/*
 ```
 
-各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。GB-028は`phase/GB-028-progression-feedback`でStatic Gateまで進め、Human Gate PASSとuser merge approvalまで停止します。
+ユーザーの最新方針により、version要件をまとめて仕上げ、Harness等で自動検証し、version末尾に最終Human Checkを行います。今回は既存GB-028 branchのverified `86d2635`から`phase/GB-029-v0.2-release-candidate`を切り、SHOP復元と全体回帰をまとめています。中間phaseごとのmergeを強制せず、最終Humanと明示のmerge/Release判断までdevelop/mainを変更しません。
 Release時のみ`develop` → `main`へmergeします。
 GB-007の作業branchは`phase/GB-007-integration-qa`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
@@ -238,7 +238,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - GB-005当時のPrices: Pan 200、Hammer 400、Blower 600、Thunder Rod 1000 Coins。GB-024で正式価格へ更新しました。
 - Server authority: `ProgressionService`がCoins / Owned Weapons / Equipped Weaponを含む唯一のPlayer profile stateを所有します。`ShopService`はpurchase request lockとUI revisionだけを管理し、ClientはWeapon IDだけを送信します。
 - State sync: `GetState`はProgressionServiceのCoins / Owned / Equippedを読み、ShopServiceのUI revisionを添えて返します。購入成功時は同じProgression stateを更新し、Shop / progression snapshotからClient表示を更新します。
-- SHOP button: GB-028配置修正から`TopbarSafeInsets`内の右側、最大112×44 pxでWAVEと同じ高さ。Shop Panelは既存の`CoreUISafeInsets`内、中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
+- SHOP button: 最新reviewで被弾HP表示との重なりが報告されたため、従来の`CoreUISafeInsets`内右上 `(1,-18,0,16)`・112×46 pxへ復元。Shop Panelは同safe area内、中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
 - Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
 - Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
 - Combat interaction: Shop open時にHold-to-Attackを停止し、ATTACKとSwitcherを隠します。Closeで即復帰しますがAttackは自動再開しません。Server Wave / Zombie simulationは停止しません。
@@ -503,12 +503,20 @@ Final Smoke（Published TEST / Mobile Landscape）:
 - Level Up / NEW RECORD / Death→Respawnは上部の1つのnotice領域を共有し、種類ごとに最新通知を保持します。Deathは最優先、Record、Levelの順です。Shop中はProgression HUD/noticeを隠し、重要noticeをClose後へ保持します。Wave clearは既存Wave表示内に次Waveも示し、Gameplayをpauseしません。
 - Shopは購入成功時にWeapon名とTAP TO EQUIPを表示し、Cardには現在LevelでのDamageを表示します。購入のみの自動Equipは追加しません。Damage NumberはServerのAttackDamageをそのまま表示し、lethal色と小さなpopで強調します。Live Numberは24個まで、HP bar timerは個体ごとに1個へ置換します。
 - `FeedbackScope`がfeedback UIのConnection / keyed task / Tweenを所有し、GUI / Zombie削除でcleanupします。No feedback Heartbeat / gameplay wait / new Remote / external Asset。
-- Static Gate: `python3 tests/run_static_gate.py`。19 specs、62 Lua/Luau compile（41 executable + 19 specs + 2 harnesses）、fresh Rojo build、hierarchy、全embedded source一致・compile・require依存、実embedded client modulesのmock runtime regression、source corruption検出、protected gameplay diff、`git diff --check`を確認します。これはRoblox runtime確認ではありません。
-- Human Gateには[GB-028 checklist](docs/GB-028-human-gate.md)を使用します。**Source → fresh build → source/revision一致 → Rojo Disconnect → artifactをStudioでopen → TEST ExperienceへPublish → fresh RobloxClient**。LiveSyncなし。CloudではStudio / Roblox / physical MobileはNOTRUNです。GB-029はGB-028 PASS / merge approval後のみです。
+- Static Gate: `python3 tests/run_static_gate.py`。現在のv0.2 RC branchで19 specs、63 compile（41 executable + 19 specs + 3 harnesses）、fresh build、全source/require一致、embedded client回帰と実Service/Picker player journey、guards、cleanup、protected gameplay、diffを自動検証します。Roblox runtimeのPASSではありません。
+- 最新Human手順は[version末尾の最小チェック](docs/GB-029-final-human-check.md)。**Source → fresh build → source/revision一致 → Rojo Disconnect → artifactをStudioでopen → TEST ExperienceへPublish → fresh RobloxClient**。LiveSyncなし。Cloudの実Studio/Roblox/physical MobileはNOTRUNです。旧phase単位の停止方針はユーザーの最新version単位の指示で更新されています。
 
 
 ### GB-028 Human review後のHUD配置修正
 
 ユーザーは旧revision `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`の全テスト項目PASSを報告しましたが、HUDが邪魔になるため配置変更を依頼しました。WAVE / SHOP launcherはRoblox TopbarSafeInsetsの空き領域へ上げ、HUDはWAVE直下の横長へ変更。GuiService.GetInsetAreaのlive safe rectanglesでnotch / standard buttons / viewport changesへ追従します。Shop overlay、数値・state・picker tuningは維持します。
 
-新artifact: `build/gb028-hud-topbar/Grave-Buster-v0.2-GB028-hud-topbar.rbxlx`。旧artifactと混同しないでください。[配置review](docs/GB-028-hud-layout-review.md)と[感覚に絞ったHuman recheck](docs/GB-028-human-gate.md)を参照。`tests/studio/GB028HudLayoutCheck.luau`はTEST Studio専用のread-only auto-checkでartifactには含めません。Cloudで実Engine実行と新配置のHuman feelはNOTRUNです。
+このtopbar SHOP版はreview履歴です。ユーザーはWAVE・横長HUDをPASSとし、SHOPだけ従来位置へ戻すよう依頼しました。最新artifactと手順は下記RCを使用します。
+
+## v0.2 Release Candidate（GB-029）
+
+`phase/GB-029-v0.2-release-candidate`でSHOPを復元し、v0.2をまとめて統合・回帰検証します。最新artifact: `build/gb029/Grave-Buster-v0.2-Release-Candidate.rbxlx`。[coverage/未完](docs/GB-029-v0.2-release-candidate.md)と[最終Human](docs/GB-029-final-human-check.md)を参照。
+
+自動player journeyは生成artifactの39 ModuleScriptsを評価し、実Progression / Shop / Combat / PlayerHealth / Wave services、実Shop/HUD/Pickerをin-memory API doublesで実行します。Wave 1 kill → XP/Coins → Level/Damage growth → purchase/picker/swap → high-wave cap80/quota → death/retain/retry/beatBest → multiplayer → save/rejoin/nonpersistent run/load refusalと入力/cleanupを検証します。これはphysics/real DataStore/実機検証ではありません。
+
+`tests/studio/GB029ReleaseCandidateCheck.luau`は許可済みTEST Studio Client専用のread-only observerで、artifactから除外。最終Humanは被弾時SHOP非重なりと最小play feelに絞ります。v0.2 implementation scopeに新しい未実装機能は見つかっていませんが、最終Human/実Engine観測とRelease判断は未完です。候補push/Library保存で停止し、develop/main merge、tag、正式Release、Roblox Publishは行いません。

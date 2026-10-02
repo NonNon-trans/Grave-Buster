@@ -48,6 +48,8 @@ for _, size in { {360, 220}, {480, 240}, {568, 262}, {667, 317}, {844, 332}, {10
    local notice = {g.NoticeX,g.NoticeY,g.NoticeWidth,g.NoticeHeight}
    local wave = {top.X+g.WaveX-g.WaveWidth*1.08/2, top.Y+g.WaveY-g.WaveHeight*1.08/2,g.WaveWidth*1.08,g.WaveHeight*1.08}
    local shop = {top.X+g.ShopX-g.ShopWidth/2,top.Y+g.ShopY-g.ShopHeight/2,g.ShopWidth,g.ShopHeight}
+   local restoredShop = {w-130,16,112,46}
+   local coreHealthBand = {0,-topHeight,w,topHeight}
    local attack = {w-142,device.Y+device.Height*0.6-56,112,112}
    local picker = {(w-math.clamp(w*0.42,280,430))/2,h-86,math.clamp(w*0.42,280,430),74}
    if g.TopbarVisible then
@@ -58,7 +60,13 @@ for _, size in { {360, 220}, {480, 240}, {568, 262}, {667, 317}, {844, 332}, {10
     assert(not overlap(wave,shop), "Topbar controls overlap")
     assert(g.WaveY==g.ShopY, "Topbar vertical center differs")
    end
-   assert(math.abs(hud[1]+hud[3]/2-g.WaveCenterX)<0.001, "HUD not directly beneath WAVE")
+   assert(math.abs(hud[1]+hud[3]/2-g.PanelCenterX)<0.001)
+   if 2*(restoredShop[1]-12-g.WaveCenterX)>=240 then
+    assert(g.PanelCenterX==g.WaveCenterX, "HUD shifted from WAVE despite available space")
+   end
+   assert(not overlap(restoredShop,coreHealthBand), "SHOP overlaps CoreUI health/topbar")
+   assert(not overlap(hud,restoredShop), "Restored SHOP overlaps horizontal HUD")
+   assert(not overlap(notice,restoredShop), "Restored SHOP overlaps notice")
    assert(hud[1]>=0 and hud[1]+hud[3]<=w)
    assert(hud[2]==6 and hud[4]<=58, "Old double-inset/vertical HUD returned")
    assert(hud[3]>hud[4], "HUD must be horizontal")

@@ -41,6 +41,17 @@ function Rules.Layout(width: number, height: number, topbar, device)
 	local lastCenter = math.max(firstCenter, topbar.X + topWidth - shopWidth - margin - gap - waveHalf)
 	local waveCenter = math.clamp(width / 2, firstCenter, lastCenter)
 	local panelWidth = math.max(0, math.min(520, 2 * math.min(waveCenter - margin, width - margin - waveCenter)))
+	-- SHOP is restored below CoreUI at its original right/top offsets. Keep the
+	-- horizontal HUD under WAVE when space permits, excluding that button lane.
+	local shopLeft = width - 130
+	local centeredRoom = math.max(0, 2 * (shopLeft - gap - waveCenter))
+	local panelCenter = waveCenter
+	if centeredRoom >= 240 then
+		panelWidth = math.min(panelWidth, centeredRoom)
+	else
+		panelWidth = math.max(0, math.min(panelWidth, 240, shopLeft - gap - margin))
+		panelCenter = math.max(margin + panelWidth / 2, math.min(waveCenter, shopLeft - gap - panelWidth / 2))
+	end
 	local attackLeft = device.X + device.Width - 142
 	local attackTop = device.Y + device.Height * 0.6 - 56
 	local panelHeight = math.max(0, math.min(58, attackTop - 6 - 8))
@@ -55,7 +66,8 @@ function Rules.Layout(width: number, height: number, topbar, device)
 		WaveHeight = math.max(0, math.min(32, (topHeight - margin) / 1.08)),
 		ShopX = topWidth - margin - shopWidth / 2, ShopY = topHeight / 2,
 		ShopWidth = shopWidth, ShopHeight = math.max(0, math.min(44, topHeight - margin)),
-		PanelX = waveCenter - panelWidth / 2, PanelY = 6,
+		PanelX = panelCenter - panelWidth / 2, PanelY = 6,
+		PanelCenterX = panelCenter,
 		PanelWidth = panelWidth, PanelHeight = panelHeight,
 		NoticeX = noticeCenter - noticeWidth / 2, NoticeY = noticeY,
 		NoticeWidth = noticeWidth, NoticeHeight = math.max(0, math.min(44, pickerTop - noticeY - margin)),

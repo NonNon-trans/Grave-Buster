@@ -12,6 +12,7 @@ from validate_client_mapping import instance_name, source_of
 parser = argparse.ArgumentParser()
 parser.add_argument('place')
 parser.add_argument('--luau', default='build/luau-tools/luau')
+parser.add_argument('--harness', default=str(Path(__file__).with_name('feedback_runtime.luau')))
 args = parser.parse_args()
 rows = []
 def visit(parent, prefix=''):
@@ -22,7 +23,10 @@ def visit(parent, prefix=''):
         rows.append(f'addNode([====[{path}]====], [====[{item.get("class")}]====], [====[{source}]====])')
         visit(item, path)
 visit(ET.parse(args.place).getroot())
-harness = Path(__file__).with_name('feedback_runtime.luau').read_text()
+harness = Path(args.harness).read_text()
+if '-- EMBEDDED_TEST_DOUBLES' in harness:
+    prefix = Path(__file__).with_name('feedback_runtime.luau').read_text().split('-- Evaluate all real client modules')[0]
+    harness = harness.replace('-- EMBEDDED_TEST_DOUBLES', prefix)
 assert harness.count('-- EMBEDDED_ARTIFACT_TOPOLOGY') == 1
 runner = harness.replace('-- EMBEDDED_ARTIFACT_TOPOLOGY', '\n'.join(rows))
 with tempfile.TemporaryDirectory(prefix='gb028-runtime-') as temp:
