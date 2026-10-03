@@ -9,6 +9,7 @@ local Workspace = game:GetService("Workspace")
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
 local FeedbackConfig = require(ReplicatedStorage.Shared.FeedbackConfig)
 local CombatRules = require(script.Parent.CombatRules)
+local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)
 local KillCounter = require(script.Parent.KillCounter)
 
 local CombatService = {}
@@ -16,15 +17,20 @@ local REMOTE_FOLDER_NAME = "CombatRemotes"
 local ATTACK_REMOTE_NAME = "AttackRequest"
 local EQUIP_REMOTE_NAME = "EquipRequest"
 local FEEDBACK_REMOTE_NAME = "CombatFeedback"
+local DAMAGE_REMOTE_NAME = "ZombieDamageFeedback"
 local DEFEATED_GROUP = "DefeatedZombie"
 local KILL_ATTRIBUTE = "SessionKills"
 
 local started = false
 local zombieService = nil
 local shopService = nil
+local progressionService = nil
+local playerHealthService = nil
 local lastAttackAt = {}
+local progressionReadyConnections = {}
 local killCounter = KillCounter.new()
 local feedbackRemote = nil
+local damageRemote = nil
 
 local function ensureRemote(folder: Folder, name: string): RemoteEvent
 	local existing = folder:FindFirstChild(name)
@@ -40,7 +46,7 @@ local function ensureRemote(folder: Folder, name: string): RemoteEvent
 	return remote
 end
 
-local function ensureRemotes(): (RemoteEvent, RemoteEvent, RemoteEvent)
+local function ensureRemotes(): (RemoteEvent, RemoteEvent, RemoteEvent, RemoteEvent)
 	local folder = ReplicatedStorage:FindFirstChild(REMOTE_FOLDER_NAME)
 	if folder and not folder:IsA("Folder") then
 		folder:Destroy()
@@ -53,7 +59,8 @@ local function ensureRemotes(): (RemoteEvent, RemoteEvent, RemoteEvent)
 	end
 	return ensureRemote(folder, ATTACK_REMOTE_NAME),
 		ensureRemote(folder, EQUIP_REMOTE_NAME),
-		ensureRemote(folder, FEEDBACK_REMOTE_NAME)
+		ensureRemote(folder, FEEDBACK_REMOTE_NAME),
+		ensureRemote(folder, DAMAGE_REMOTE_NAME)
 end
 
 local function getCharacterRoot(player: Player): (Model?, BasePart?)
@@ -214,10 +221,14 @@ end
 
 local function defeatZombie(model: Model, playerRoot: BasePart, weaponName: string, config)
 	local targetRoot = zombieService.GetRoot(model)
-	if not targetRoot or not zombieService.Release(model) then
-		return nil
+	if not zombieService.Release(model) then
+		return nil, false
 	end
 	model:SetAttribute("ZombieState", "DEFEATED")
+	if not targetRoot or not targetRoot.Parent then
+		Debris:AddItem(model, config.PresentationLifetime)
+		return nil, true
+	end
 	local humanoid = model:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid:Move(Vector3.zero)
@@ -242,10 +253,13 @@ local function defeatZombie(model: Model, playerRoot: BasePart, weaponName: stri
 	targetRoot:ApplyImpulse((desiredVelocity - targetRoot.AssemblyLinearVelocity) * targetRoot.AssemblyMass)
 	targetRoot:ApplyAngularImpulse(Vector3.new(config.Spin, config.Spin * 0.5, -config.Spin) * targetRoot.AssemblyMass)
 	Debris:AddItem(model, config.PresentationLifetime)
-	return targetRoot
+	return targetRoot, true
 end
 
 local function performAttack(player: Player)
+	if not progressionService.IsReady(player) then
+		return
+	end
 	local weaponName = player:GetAttribute("EquippedWeapon")
 	local config = WeaponConfig.Get(weaponName)
 	if not config or not shopService.IsOwned(player, weaponName) then
@@ -260,33 +274,61 @@ local function performAttack(player: Player)
 		return
 	end
 	lastAttackAt[player] = now
+	playerHealthService.EndProtection(player)
+	local attackDamage = progressionService.ResolveFinalAttackDamage(player, config.BaseDamage)
 
 	local targets = queryTargets(root, config)
 	local feedbackRoots = {}
+	local damageResults = {}
 	local effectLimit = FeedbackConfig.GetEffectCount(config.MaxTargets)
 	local defeatCount = 0
+	local defeatsByWave = {}
 	for index = 1, math.min(#targets, config.MaxTargets) do
-		local defeatedRoot = defeatZombie(targets[index], root, weaponName, config)
-		if defeatedRoot then
-			defeatCount += 1
-			if #feedbackRoots < effectLimit then
-				table.insert(feedbackRoots, defeatedRoot)
+		local model = targets[index]
+		local result = zombieService.ApplyDamage(model, attackDamage)
+		if result then
+			table.insert(damageResults, {
+				Model = model,
+				AttackDamage = result.AttackDamage,
+				CurrentHP = result.AfterHP,
+				MaxHP = result.MaxHP,
+				Lethal = result.Lethal,
+			})
+			if result.Lethal then
+				local spawnWave = zombieService.GetSpawnWave(model)
+				local defeatedRoot, released = defeatZombie(model, root, weaponName, config)
+				if released then
+					defeatCount += 1
+					if spawnWave then
+						defeatsByWave[spawnWave] = (defeatsByWave[spawnWave] or 0) + 1
+					end
+					if defeatedRoot and #feedbackRoots < effectLimit then
+						table.insert(feedbackRoots, defeatedRoot)
+					end
+				end
 			end
 		end
 	end
+	if #damageResults > 0 then
+		damageRemote:FireAllClients(damageResults)
+	end
 	if defeatCount > 0 then
-		player:SetAttribute(KILL_ATTRIBUTE, killCounter:Add(player, defeatCount))
+		local kills = killCounter:Add(player, defeatCount)
+		player:SetAttribute(KILL_ATTRIBUTE, kills)
+		progressionService.AwardZombieDefeats(player, defeatsByWave)
 		feedbackRemote:FireClient(player, weaponName, feedbackRoots)
 	end
 end
 
-function CombatService.Start(service, ownershipService)
+function CombatService.Start(service, ownershipService, playerProgressionService, healthService)
 	if started then
 		return
 	end
 	started = true
 	zombieService = service
 	shopService = ownershipService
+	progressionService = playerProgressionService
+	playerHealthService = healthService
 	WeaponConfig.Validate()
 	FeedbackConfig.Validate()
 
@@ -296,22 +338,41 @@ function CombatService.Start(service, ownershipService)
 	PhysicsService:CollisionGroupSetCollidable(DEFEATED_GROUP, DEFEATED_GROUP, false)
 	PhysicsService:CollisionGroupSetCollidable(DEFEATED_GROUP, "Zombie", false)
 
-	local attackRemote, equipRemote, combatFeedbackRemote = ensureRemotes()
+	local attackRemote, equipRemote, combatFeedbackRemote, zombieDamageRemote = ensureRemotes()
 	feedbackRemote = combatFeedbackRemote
+	damageRemote = zombieDamageRemote
 	local function initializePlayer(player: Player)
+		if not progressionService.IsReady(player) then
+			return
+		end
 		player:SetAttribute(KILL_ATTRIBUTE, killCounter:Ensure(player))
 		local equipped = player:GetAttribute("EquippedWeapon")
 		if not WeaponConfig.IsValid(equipped) or not shopService.IsOwned(player, equipped) then
-			player:SetAttribute("EquippedWeapon", WeaponConfig.DefaultWeapon)
+			progressionService.SetEquippedWeapon(player, WeaponConfig.DefaultWeapon)
 		end
 	end
-	for _, player in Players:GetPlayers() do
+	local function bindPlayer(player: Player)
+		if progressionReadyConnections[player] then
+			return
+		end
 		initializePlayer(player)
+		progressionReadyConnections[player] = player:GetAttributeChangedSignal("ProgressionReady"):Connect(function()
+			initializePlayer(player)
+		end)
 	end
-	Players.PlayerAdded:Connect(initializePlayer)
+	for _, player in Players:GetPlayers() do
+		bindPlayer(player)
+	end
+	Players.PlayerAdded:Connect(bindPlayer)
+	DamageConfig.Validate()
 	Players.PlayerRemoving:Connect(function(player)
 		lastAttackAt[player] = nil
 		killCounter:Remove(player)
+		local connection = progressionReadyConnections[player]
+		if connection then
+			connection:Disconnect()
+			progressionReadyConnections[player] = nil
+		end
 	end)
 	attackRemote.OnServerEvent:Connect(function(player, ...)
 		if select("#", ...) == 0 then
@@ -319,11 +380,12 @@ function CombatService.Start(service, ownershipService)
 		end
 	end)
 	equipRemote.OnServerEvent:Connect(function(player, requestedWeapon, ...)
-		if select("#", ...) == 0
+		if progressionService.IsReady(player)
+			and select("#", ...) == 0
 			and type(requestedWeapon) == "string"
 			and WeaponConfig.IsValid(requestedWeapon)
 			and shopService.IsOwned(player, requestedWeapon) then
-			player:SetAttribute("EquippedWeapon", requestedWeapon)
+			progressionService.SetEquippedWeapon(player, requestedWeapon)
 		end
 	end)
 end

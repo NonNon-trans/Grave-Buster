@@ -7,6 +7,9 @@ local ShopConfig = require(ReplicatedStorage.Shared.ShopConfig)
 local WeaponConfig = require(ReplicatedStorage.Shared.WeaponConfig)
 local OwnedWeaponSource = require(script.Parent:WaitForChild("OwnedWeaponSource"))
 local ShopPresentation = require(script.Parent:WaitForChild("ShopPresentation"))
+local ProgressionHud = require(script.Parent:WaitForChild("ProgressionHud"))
+local FeedbackScope = require(script.Parent:WaitForChild("FeedbackScope"))
+local Rules = require(script.Parent:WaitForChild("ProgressionFeedbackRules"))
 
 local ShopController = {}
 local player = Players.LocalPlayer
@@ -42,6 +45,7 @@ function ShopController.Start(combatController)
 	local getStateRemote = shopRemotes:WaitForChild("GetState")
 	local purchaseRemote = shopRemotes:WaitForChild("PurchaseRequest")
 	local stateChangedRemote = shopRemotes:WaitForChild("StateChanged")
+	local progressionStateChanged = ReplicatedStorage:WaitForChild("ProgressionRemotes"):WaitForChild("StateChanged")
 	local equipRemote = ReplicatedStorage:WaitForChild("CombatRemotes"):WaitForChild("EquipRequest")
 	local playerGui = player:WaitForChild("PlayerGui")
 	local previous = playerGui:FindFirstChild("GraveBusterShopGui")
@@ -57,6 +61,7 @@ function ShopController.Start(combatController)
 	gui.ClipToDeviceSafeArea = true
 	gui.DisplayOrder = 10
 	gui.Parent = playerGui
+	local scope = FeedbackScope.new(gui)
 
 	local shopButton = Instance.new("TextButton")
 	shopButton.Name = "ShopButton"
@@ -153,6 +158,7 @@ function ShopController.Start(combatController)
 		16
 	)
 	feedback.TextColor3 = Color3.fromRGB(235, 211, 129)
+	feedback.TextScaled = true
 	feedback.ZIndex = 12
 
 	local list = Instance.new("ScrollingFrame")
@@ -193,13 +199,19 @@ function ShopController.Start(combatController)
 
 		local icon = makeLabel(card, "Icon", config.IconGlyph, UDim2.fromOffset(54, 40), UDim2.fromOffset(8, 7), 15)
 		icon.ZIndex = 14
-		local name = makeLabel(card, "WeaponName", config.DisplayName, UDim2.new(0.45, 0, 1, 0), UDim2.fromOffset(66, 0), 17)
+		local name = makeLabel(card, "WeaponName", config.DisplayName, UDim2.new(0.55, -74, 0, 29), UDim2.fromOffset(66, 1), 15)
 		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.TextScaled = true
 		name.ZIndex = 14
+		local power = makeLabel(card, "WeaponPower", "", UDim2.new(0.55, -74, 0, 20), UDim2.fromOffset(66, 29), 12)
+		power.TextXAlignment = Enum.TextXAlignment.Left
+		power.TextColor3 = Color3.fromRGB(194, 216, 178)
+		power.ZIndex = 14
 		local state = makeLabel(card, "State", "", UDim2.new(0.45, -12, 1, 0), UDim2.new(0.55, 0, 0, 0), 15)
 		state.TextXAlignment = Enum.TextXAlignment.Right
+		state.TextScaled = true
 		state.ZIndex = 14
-		cards[weaponId] = { Button = card, State = state }
+		cards[weaponId] = { Button = card, State = state, Power = power }
 	end
 
 	local function makeOwnedSet()
@@ -216,6 +228,9 @@ function ShopController.Start(combatController)
 		local equipped = confirmedEquipped
 		for _, weaponId in ShopConfig.Order do
 			local card = cards[weaponId]
+			local baseDamage = WeaponConfig.Get(weaponId).BaseDamage
+			local level = player:GetAttribute("PlayerLevel") or 1
+			card.Power.Text = ShopPresentation.FormatPower(Rules.PowerDamage(baseDamage, level), level)
 			if pendingPurchases[weaponId] then
 				card.State.Text = "PROCESSING"
 				card.Button.BackgroundColor3 = Color3.fromRGB(70, 67, 52)
@@ -245,14 +260,14 @@ function ShopController.Start(combatController)
 			return
 		end
 		syncing = true
-		task.spawn(function()
+		scope:Spawn("Sync", function()
 			local ok, state = pcall(function()
 				return getStateRemote:InvokeServer()
 			end)
 			syncing = false
 			if ok and state then
 				applyState(state)
-			else
+			elseif not ok then
 				feedback.Text = "SHOP CONNECTION ERROR"
 			end
 		end)
@@ -264,13 +279,14 @@ function ShopController.Start(combatController)
 		shopButton.Visible = not isOpen
 		feedback.Text = ""
 		combatController.SetShopOpen(isOpen)
+		ProgressionHud.SetShopOpen(isOpen)
 		if isOpen then
 			syncState()
 		end
 	end
 
 	for weaponId, card in cards do
-		card.Button.Activated:Connect(function()
+		scope:Connect(card.Button.Activated, function()
 			if not shopOpen or pendingPurchases[weaponId] then
 				return
 			end
@@ -285,7 +301,7 @@ function ShopController.Start(combatController)
 			pendingPurchases[weaponId] = true
 			feedback.Text = ""
 			render()
-			task.spawn(function()
+			scope:Spawn("Purchase" .. weaponId, function()
 				local ok, response = pcall(function()
 					return purchaseRemote:InvokeServer(weaponId)
 				end)
@@ -295,7 +311,9 @@ function ShopController.Start(combatController)
 				elseif response.State then
 					applyState(response.State)
 					if response.Success then
-						feedback.Text = "PURCHASED"
+						feedback.Text = string.format("UNLOCKED %s • TAP TO EQUIP", WeaponConfig.Get(weaponId).DisplayName)
+						feedback.TextColor3 = Color3.fromRGB(184, 233, 160)
+						scope:Tween("PurchasePulse", feedback, 0.6, { TextColor3 = Color3.fromRGB(235, 211, 129) })
 					elseif response.Reason == "NOT_ENOUGH_COINS" then
 						feedback.Text = "NOT ENOUGH COINS"
 					elseif response.Reason == "ALREADY_OWNED" then
@@ -311,18 +329,34 @@ function ShopController.Start(combatController)
 		end)
 	end
 
-	shopButton.Activated:Connect(function()
+	scope:Connect(shopButton.Activated, function()
 		setOpen(true)
 	end)
-	closeButton.Activated:Connect(function()
+	scope:Connect(closeButton.Activated, function()
 		setOpen(false)
 	end)
-	OwnedWeaponSource.Changed:Connect(render)
-	player:GetAttributeChangedSignal("EquippedWeapon"):Connect(function()
+	scope:Connect(OwnedWeaponSource.Changed, render)
+	scope:Connect(player:GetAttributeChangedSignal("PlayerLevel"), render)
+	scope:Connect(player:GetAttributeChangedSignal("EquippedWeapon"), function()
 		confirmedEquipped = player:GetAttribute("EquippedWeapon")
+		if shopOpen and WeaponConfig.IsValid(confirmedEquipped) then
+			feedback.Text = string.format("EQUIPPED %s", WeaponConfig.Get(confirmedEquipped).DisplayName)
+		end
 		render()
 	end)
-	stateChangedRemote.OnClientEvent:Connect(applyState)
+	scope:Connect(stateChangedRemote.OnClientEvent, function(state)
+		applyState(state)
+	end)
+	scope:Connect(progressionStateChanged.OnClientEvent, function(snapshot)
+		if type(snapshot) == "table" then
+			OwnedWeaponSource.ApplyAuthoritativeCoins(snapshot.Coins)
+		end
+	end)
+	scope:OnDestroy(function()
+		ProgressionHud.SetShopOpen(false)
+		combatController.SetShopOpen(false)
+		started = false
+	end)
 
 	render()
 	syncState()

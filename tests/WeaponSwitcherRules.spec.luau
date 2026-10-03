@@ -2,45 +2,141 @@
 
 local Rules = require("../src/client/WeaponSwitcherRules")
 
-local owned = { "BAT", "PAN", "HAMMER", "BLOWER", "ROD" }
-assert(Rules.Step(owned, "BAT", 1) == "PAN")
-assert(Rules.Step(owned, "BAT", -1) == "ROD", "Previous must wrap first to last")
-assert(Rules.Step(owned, "ROD", 1) == "BAT", "Next must wrap last to first")
-assert(Rules.Step({ "BAT" }, "BAT", 1) == "BAT", "Single-owned list must remain stable")
+local order = { "BAT", "PAN", "HAMMER", "BLOWER", "ROD" }
+local owned = Rules.OrderOwned({ "ROD", "BAT", "HAMMER", "PAN", "PAN", "UNKNOWN" }, order)
+assert(#owned == 4 and owned[1] == "BAT" and owned[2] == "PAN" and owned[3] == "HAMMER" and owned[4] == "ROD",
+	"Only owned weapons should appear, deduplicated in canonical weapon order")
 assert(Rules.ResolveCurrent(owned, "PAN", "BAT") == "PAN")
 assert(Rules.ResolveCurrent(owned, "REMOVED", "BAT") == "BAT")
 assert(Rules.ResolveCurrent({ "PAN" }, "REMOVED", "BAT") == "PAN")
 
-local threshold = 48
-assert(Rules.GetSwipeDirection(-threshold, 4, threshold) == 1, "Swipe left selects next")
-assert(Rules.GetSwipeDirection(threshold, 4, threshold) == -1, "Swipe right selects previous")
-assert(Rules.GetSwipeDirection(47, 0, threshold) == 0, "Small drag must not switch")
-assert(Rules.GetSwipeDirection(60, 55, threshold) == 0, "Mostly vertical drag must not switch")
+assert(Rules.ArrowStep(1, 1, 5) == 2, "Next arrow advances exactly one weapon")
+assert(Rules.ArrowStep(2, -1, 5) == 1, "Previous arrow advances exactly one weapon")
+assert(Rules.ArrowStep(1, -1, 5) == 1, "Left boundary clamps without wrapping")
+assert(Rules.ArrowStep(5, 1, 5) == 5, "Right boundary clamps without wrapping")
+assert(Rules.ArrowStep(1, 1, 1) == 1, "Single-owned list remains stable")
+
+assert(Rules.PositionForDrag(3, -100, 200, 5) == 3.5, "Drag preview follows horizontal pointer movement")
+local draggedPosition = Rules.PositionForDrag(3, 10, 200, 5)
+assert(math.abs(draggedPosition - 2.95) < 0.0001, "A small pointer move produces a fractional scroll position")
+local dragStartCanvasOffset = Rules.CanvasOffset(3, 200, 5)
+assert(math.abs(Rules.CanvasOffset(draggedPosition, 200, 5) - dragStartCanvasOffset + 10) < 0.0001,
+	"A ten-pixel pointer movement produces an equal and opposite CanvasPosition movement")
+assert(Rules.CanvasOffset(3.5, 200, 5) == 500, "Fractional scroll places two items around the fixed selection area")
+assert(Rules.CanvasOffset(-4, 200, 5) == 0 and Rules.CanvasOffset(20, 200, 5) == 800,
+	"CanvasPosition is clamped to the first and last owned item")
+assert(Rules.PointInside(10, 20, 100, 80, 60, 50))
+assert(not Rules.PointInside(10, 20, 100, 80, 111, 50),
+	"Gesture capture is restricted to the picker center hit area")
+assert(Rules.SnapIndex(3.49, 5) == 3 and Rules.SnapIndex(3.5, 5) == 4,
+	"Release snaps to the nearest weapon position")
+assert(Rules.SnapIndex(0.2, 5) == 1 and Rules.SnapIndex(5.8, 5) == 5, "Drag snap clamps at both boundaries")
+
+local tuning = Rules.Tuning
+assert(tuning.SnapDuration == 0.16, "Shorter snap reduces final selection delay")
+assert(Rules.FlickTravel(750, 200) == 0, "Previously accepted light flick no longer triggers inertia")
+local weakTravel = Rules.FlickTravel(1100, 200)
+local mediumTravel = Rules.FlickTravel(1400, 200)
+local strongTravel = Rules.FlickTravel(1800, 200)
+local maximumTravel = Rules.FlickTravel(3000, 200)
+assert(Rules.FlickTravel(950, 200) >= 0.55, "Round 3 restores light inertia below the Round 2 threshold")
+assert(mediumTravel >= 1 and mediumTravel <= 1.5, "Reference ordinary flick travels one to 1.5 weapons")
+assert(weakTravel >= 0.55 and Rules.SnapIndex(2 + weakTravel, 5) == 3,
+	"Light flick can send about one weapon")
+assert(Rules.SnapIndex(2 + mediumTravel, 5) == 3, "Normal flick sends about one weapon")
+assert(strongTravel == 1.8, "Moderate release velocity retains Round 3 travel")
+local deliberateStrongTravel = Rules.FlickTravel(2200, 200)
+assert(deliberateStrongTravel >= 2 and deliberateStrongTravel <= 3,
+	"Deliberately stronger flick reaches two to three weapons")
+assert(maximumTravel == 3, "Maximum travel is capped at three weapons")
+assert(Rules.FlickSnapIndex(Rules.ProjectFlick(1, -3000, 200, 5, 1), 1, 5) == 4,
+	"Deliberate strong flick can select a weapon three slots ahead")
+assert(Rules.FlickTravel(900, 300) == 0.55, "Minimum inertial travel remains a gentle fractional weapon")
+for _, width in { 100, 150, 200 } do
+	assert(Rules.FlickTravel(899, width) == 0, "Below 900 px/s there is no inertia")
+	assert(Rules.FlickTravel(900, width) > 0, "Threshold starts light inertia")
+	local ordinaryStep = Rules.SnapIndex(2 + Rules.FlickTravel(1000, width), 5) - 2
+	assert(ordinaryStep == 1, "Ordinary flick selects about one weapon across picker widths")
+	assert(Rules.FlickTravel(3000, width) == 3, "Maximum travel is capped across picker widths")
+	assert(Rules.FlickSnapIndex(Rules.ProjectFlick(3, -1000, width, 5, 3), 3, 5) == 4,
+		"Ordinary flick from the middle retains the intermediate weapon")
+	assert(Rules.FlickSnapIndex(Rules.ProjectFlick(3, 1000, width, 5, 3), 3, 5) == 2,
+		"Reverse ordinary flick also retains the intermediate weapon")
+end
+assert(Rules.ProjectFlick(4.8, -3000, 200, 5, 4.8) == 5, "Flick respects right boundary")
+assert(Rules.ProjectFlick(1.2, 3000, 200, 5, 1.2) == 1, "Flick respects left boundary")
+assert(Rules.ProjectFlick(3, -3000, 200, 20, 3) <= 3 + tuning.MaximumFlickTravel,
+	"Flick travel is capped relative to gesture start")
+local maxSnap = Rules.FlickSnapIndex(7.8, 2.8, 20)
+assert(maxSnap == 5 and maxSnap - 2.8 <= tuning.MaximumFlickTravel,
+	"Final integer snap cannot exceed maximum travel after rounding")
 
 local drag = Rules.DragState.new()
 local touch = {}
-assert(drag:Begin(touch, 100, 100))
-assert(not drag:Begin({}, 100, 100), "A second touch cannot replace an active gesture")
-assert(drag:Update(touch, 40, 104))
-local handled, direction = drag:Finish(touch, threshold)
-assert(handled and direction == 1)
-local handledAgain, secondDirection = drag:Finish(touch, threshold)
-assert(not handledAgain and secondDirection == 0, "One swipe can produce only one switch")
+assert(drag:Begin(touch, 200, 100, 1, 3))
+assert(not drag:Begin({}, 200, 100, 1.01, 3), "A second pointer cannot replace an active gesture")
+local updated, preview = drag:Update(touch, 100, 104, 1.1, 200, 5)
+assert(updated and preview == 3.5)
+local handled, _, velocity = drag:Finish(touch)
+assert(handled and velocity < 0, "Drag state captures signed release velocity")
+assert(not select(1, drag:Finish(touch)), "One pointer release can only finish once")
 
-assert(drag:Begin(touch, 0, 0))
+assert(drag:Begin(touch, 0, 0, 2, 2))
 drag:Cancel()
-assert(not select(1, drag:Finish(touch, threshold)), "Cancelled touch cannot switch")
+assert(not select(1, drag:Finish(touch)), "Cancelled touch cannot commit a selection")
+
+local commitGate = Rules.SnapCommitGate.new()
+local token = commitGate:Begin(4)
+assert(commitGate:Commit(token) == 4, "Snap completion commits its final selection")
+assert(commitGate:Commit(token) == nil, "Repeated completion cannot equip twice")
+local staleToken = commitGate:Begin(2)
+commitGate:Cancel()
+assert(commitGate:Commit(staleToken) == nil, "Interrupted snap cannot commit stale selection")
 
 local visibility = Rules.VisibilityState.new()
 assert(visibility:GetMode() == "Idle")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5,
+	"Idle picker visibility is visibly reduced as one composited group")
 visibility:Activate()
 assert(visibility:GetMode() == "Active")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
+	"Interaction restores full group visibility immediately")
 local staleGeneration = visibility:ScheduleIdle()
 assert(visibility:GetMode() == "Hold")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0,
+	"Picker stays fully visible through the post-interaction hold")
 visibility:Activate()
-assert(not visibility:BeginFade(staleGeneration), "New touch must cancel a pending fade")
+assert(not visibility:BeginFade(staleGeneration), "New touch cancels a pending fade")
 local generation = visibility:ScheduleIdle()
 assert(visibility:BeginFade(generation) and visibility:GetMode() == "Fade")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5,
+	"Fade targets the idle group transparency after the hold interval")
 assert(visibility:CompleteFade(generation) and visibility:GetMode() == "Idle")
+assert(Rules.GroupTransparencyForMode(visibility:GetMode()) == 0.5)
 
-print("PASS WeaponSwitcherRules: ownership fallback, wrap, swipe, one-shot drag, and fade cancellation")
+print("PASS WeaponSwitcherRules: owned ordering, exact arrows, continuous pixel drag, flick/inertia, snap, boundaries, one-shot equip commit, and group opacity lifecycle")
+
+-- Real card centers, viewport resizing, and both end padding boundaries.
+for _, width in { 138, 234, 288 } do
+	for _, count in { 1, 2, 5 } do
+		local g = Rules.CenterGeometry(width, count)
+		assert(g.EndPadding > 0)
+		for index = 1, count do
+			local canvas = Rules.CanvasOffset(index, g.SlotWidth, count)
+			assert(math.abs(Rules.ItemCenter(index, g) - canvas - width / 2) < 0.00001,
+				"Each visual card center aligns with the viewport center at snap")
+			assert(Rules.NearestCenter(canvas, g, count) == index)
+		end
+		assert(math.abs(g.CanvasWidth - width - Rules.CanvasOffset(count, g.SlotWidth, count)) < 0.00001,
+			"Last card can reach center without hitting the canvas boundary early")
+		if count >= 2 then
+			assert(Rules.NearestCenter(g.SlotWidth * 0.49, g, count) == 1)
+			assert(Rules.NearestCenter(g.SlotWidth * 0.51, g, count) == 2)
+			local before = Rules.ItemCenter(2, g) - g.SlotWidth * 0.49
+			local after = Rules.ItemCenter(2, g) - (g.SlotWidth * 0.49 + 10)
+			assert(math.abs(before - after - 10) < 0.00001, "Visual centers move continuously in pixels")
+		end
+	end
+end
+assert(Rules.NearestCenter(0, Rules.CenterGeometry(200, 0), 0) == nil)
+print("PASS center alignment: nearest visual center, responsive viewport, symmetric padding, continuous movement")

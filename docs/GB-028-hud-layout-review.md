@@ -1,0 +1,19 @@
+# GB-028 HUD layout review and automatic coverage
+
+**Historical topbar-SHOP revision.** The user subsequently passed WAVE/horizontal HUD, requested SHOP restoration after a health-bar overlap, and authorized version-wide regression. Current behavior and gates are in [v0.2 RC review](GB-029-v0.2-release-candidate.md).
+
+The user reported the original GB-028 Human checklist fully PASS at `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`, then requested higher WAVE/SHOP and a wider HUD beneath WAVE because the left-side HUD interfered with play. Prior functional PASS is recorded; the revised layout has not been human-reviewed.
+
+Cause found in source: the former WAVE and SHOP used CoreUISafeInsets (already below CoreUI) plus 16 px offsets. Progression was a 186 × 116 px column at upper-left. This consumed more gameplay space than the requested layout.
+
+Wave and the Shop launcher now use separate TopbarSafeInsets ScreenGuis. Shop overlay remains in its existing CoreUISafeInsets ScreenGui. Shared HudLayout reads live CoreUI, TopbarSafe and DeviceSafe rectangles via GuiService.GetInsetArea, reacts to TopbarInset and GUI size/position changes, and never polls on Heartbeat. The header centers share the actual topbar height and reserve the engine's standard-button space. Progression is a responsive horizontal two-row panel, at most 58 px high, centered exactly under WAVE. KILLS joins that panel with the same SessionKills attribute source. Notice layout reserves the actual device-safe attack/picker lanes. No fixed phone resolution or assumed topbar height is used.
+
+Automatic cloud checks: unchanged server/config/picker source bytes; full specs; 112 coordinate cases varying safe widths/heights, topbar heights and standard-control occupancy; real embedded client module evaluation and mock lifecycle/input/state regression; live inset/resize response, horizontal center alignment and single KILLS; all executable source hashes/compile/static requires; corruption rejection; cleanup and diff check. Runtime Studio harness guard tests verify Studio-only/client-only/explicit TEST universe and read-only isolation.
+
+The delivered tests/studio/GB028HudLayoutCheck.luau checks actual Roblox GUI bounds and settled display/attribute agreement during ordinary TEST Studio play. It is excluded from production mapping and has no Remote, reward/data writes or UI injection. Default TEST_UNIVERSE_ID=0 refuses execution until the existing authorized TEST id is explicitly supplied. Cloud cannot run Studio/Roblox: engine check and new-layout physical device feel remain NOTRUN. Prior feedback numbers/state and engine behavior are not claimed to be re-executed by a cloud mock.
+
+Screenshot: Library resolved the formal filename IMG_5864.jpeg, but official local materialization failed on the initial attempt and one bounded retry. Pixels remain UNREAD. Layout decisions are grounded in the user's written instruction and source/API contracts, not an invented image observation. Screenshot-specific comparison remains a limitation for Human review.
+
+The explicitly inset-aware header and progression ScreenGuis use SafeAreaCompatibility.None so automatic fullscreen extension cannot expand their manually bounded layout. The passed combat and Shop overlay behavior is unchanged.
+
+Primary API sources: [GuiService GetInsetArea and TopbarInset](https://create.roblox.com/docs/reference/engine/classes/GuiService), [ScreenInsets](https://create.roblox.com/docs/reference/engine/enums/ScreenInsets), [ScreenGui](https://create.roblox.com/docs/reference/engine/classes/ScreenGui), [SafeAreaCompatibility](https://create.roblox.com/docs/reference/engine/enums/SafeAreaCompatibility).

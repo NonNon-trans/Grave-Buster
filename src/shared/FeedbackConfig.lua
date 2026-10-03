@@ -5,6 +5,7 @@ local FeedbackConfig = {
 	TrailLifetime = 0.22,
 	WaveEmphasisHold = 0.55,
 	WaveEmphasisFade = 0.35,
+	WaveClearLifetime = 1.35,
 }
 
 function FeedbackConfig.GetEffectCount(defeatCount: number): number
@@ -16,6 +17,7 @@ function FeedbackConfig.Validate(): boolean
 	assert(FeedbackConfig.TrailLifetime > 0 and FeedbackConfig.TrailLifetime <= 0.3)
 	assert(FeedbackConfig.WaveEmphasisHold <= 1)
 	assert(FeedbackConfig.WaveEmphasisFade <= 0.5)
+	assert(FeedbackConfig.WaveClearLifetime > 0 and FeedbackConfig.WaveClearLifetime <= 2)
 	return true
 end
 

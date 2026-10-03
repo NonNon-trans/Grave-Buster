@@ -6,8 +6,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
 local HordeConfig = require(ReplicatedStorage.Shared.HordeConfig)
+local DamageConfig = require(ReplicatedStorage.Shared.DamageConfig)
 local ActiveZombieRegistry = require(script.Parent.ActiveZombieRegistry)
+local DamageRules = require(script.Parent.DamageRules)
 local ZombieRules = require(script.Parent.ZombieRules)
+local RunRules = require(script.Parent.RunRules)
 
 type JointSet = {
 	RightShoulder: Motor6D,
@@ -24,6 +27,16 @@ type ZombieEntry = {
 	TargetPlayer: Player?,
 	ApproachOffset: Vector3,
 	AnimationPhase: number,
+	MaxHP: number,
+	CurrentHP: number,
+	SpawnWave: number,
+	ZombieDamage: number,
+	NextAttackAt: number,
+	Lifecycle: string,
+}
+
+type PlayerHealthServiceApi = {
+	DamagePlayer: (Player, number) -> boolean,
 }
 
 local ZombieService = {}
@@ -37,6 +50,7 @@ local registry = ActiveZombieRegistry.new()
 local container: Folder? = nil
 local spawnCursor = 0
 local running = false
+local playerHealthService: PlayerHealthServiceApi? = nil
 
 local function createPart(
 	model: Model,
@@ -82,7 +96,7 @@ local function createMotor(
 	return motor
 end
 
-local function createZombieModel(index: number): (Model, Humanoid, BasePart, JointSet)
+local function createZombieModel(index: number, maxHP: number): (Model, Humanoid, BasePart, JointSet)
 	local model = Instance.new("Model")
 	model.Name = string.format("Zombie%03d", index)
 
@@ -110,8 +124,8 @@ local function createZombieModel(index: number): (Model, Humanoid, BasePart, Joi
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.Name = "Humanoid"
-	humanoid.MaxHealth = 1
-	humanoid.Health = 1
+	humanoid.MaxHealth = maxHP
+	humanoid.Health = maxHP
 	humanoid.WalkSpeed = HordeConfig.ZombieWalkSpeed
 	humanoid.AutoRotate = true
 	humanoid.BreakJointsOnDeath = false
@@ -200,9 +214,20 @@ local function updateZombie(model: Model, entry: ZombieEntry, now: number)
 	local destination = targetRoot.Position + entry.ApproachOffset
 	local delta = destination - entry.Root.Position
 	local horizontalDistance = Vector3.new(delta.X, 0, delta.Z).Magnitude
-	if horizontalDistance <= HordeConfig.StopDistance then
+	if horizontalDistance <= DamageConfig.ZombieAttackRange then
 		entry.Humanoid:Move(Vector3.zero)
 		updateAnimation(entry, now, false)
+		if entry.TargetPlayer and RunRules.CanZombieAttack(
+			entry.NextAttackAt,
+			now,
+			targetRoot.Parent ~= nil
+		) then
+			entry.NextAttackAt = now + DamageConfig.ZombieAttackInterval
+			local healthService = playerHealthService
+			if healthService then
+				healthService.DamagePlayer(entry.TargetPlayer, entry.ZombieDamage)
+			end
+		end
 	else
 		entry.Humanoid:MoveTo(destination)
 		updateAnimation(entry, now, true)
@@ -219,11 +244,12 @@ local function updateLoop()
 	end
 end
 
-function ZombieService.Start()
+function ZombieService.Start(healthService: PlayerHealthServiceApi)
 	if running then
 		return
 	end
 	running = true
+	playerHealthService = healthService
 	if not PhysicsService:IsCollisionGroupRegistered(COLLISION_GROUP) then
 		PhysicsService:RegisterCollisionGroup(COLLISION_GROUP)
 	end
@@ -242,19 +268,24 @@ function ZombieService.Start()
 	task.spawn(updateLoop)
 end
 
-function ZombieService.Spawn(): Model?
+function ZombieService.Spawn(spawnWave: number): Model?
 	if not running or not container or not HordeConfig.CanSpawn(registry:Count()) then
 		return nil
 	end
+	local maxHP = HordeConfig.GetZombieHP(spawnWave)
+	local zombieDamage = HordeConfig.GetZombieDamage(spawnWave)
 	spawnCursor += 1
 	local position = getSpawnPosition(spawnCursor)
-	local model, humanoid, root, joints = createZombieModel(spawnCursor)
+	local model, humanoid, root, joints = createZombieModel(spawnCursor, maxHP)
 	model:SetAttribute("ZombieState", "ACTIVE")
+	model:SetAttribute("SpawnWave", spawnWave)
+	model:SetAttribute("ZombieDamage", zombieDamage)
+	model:SetAttribute("MaxHP", maxHP)
+	model:SetAttribute("CurrentHP", maxHP)
 	model:PivotTo(CFrame.lookAt(position, Vector3.new(0, position.Y, 0)))
 	model.Parent = container
 	root:SetNetworkOwner(nil)
-
-	local approachSlot = (spawnCursor - 1) % HordeConfig.ActiveZombieCap
+	local approachSlot = (spawnCursor - 1) % HordeConfig.MaxAliveZombies
 	local approachRing = math.floor(approachSlot / APPROACH_SLOTS_PER_RING)
 	local ringSlot = approachSlot % APPROACH_SLOTS_PER_RING
 	local angle = (ringSlot + approachRing * 0.5) / APPROACH_SLOTS_PER_RING * math.pi * 2
@@ -267,6 +298,12 @@ function ZombieService.Spawn(): Model?
 		TargetPlayer = nil,
 		ApproachOffset = Vector3.new(math.cos(angle), 0, math.sin(angle)) * approachRadius,
 		AnimationPhase = spawnCursor * 0.7,
+		MaxHP = maxHP,
+		CurrentHP = maxHP,
+		SpawnWave = spawnWave,
+		ZombieDamage = zombieDamage,
+		NextAttackAt = 0,
+		Lifecycle = "ACTIVE",
 	})
 	return model
 end
@@ -280,8 +317,39 @@ function ZombieService.GetActiveCount(): number
 	return registry:Count()
 end
 
+function ZombieService.GetActiveCountForWave(wave: number): number
+	return registry:CountForWave(wave)
+end
+
+function ZombieService.GetSpawnWave(model: Model): number?
+	local entry = registry:Get(model)
+	return if entry then entry.SpawnWave else nil
+end
+
 function ZombieService.IsActive(model: Model): boolean
-	return registry:Contains(model)
+	local entry = registry:Get(model)
+	return entry ~= nil and entry.Lifecycle == "ACTIVE"
+end
+
+-- Damage and lethal lifecycle transition are synchronous and server-owned.
+function ZombieService.ApplyDamage(model: Model, damage: number)
+	local entry = registry:Get(model)
+	if not entry then
+		return nil
+	end
+	local result = DamageRules.Apply(entry, damage)
+	if not result then
+		return nil
+	end
+	model:SetAttribute("CurrentHP", result.AfterHP)
+	local humanoid = entry.Humanoid
+	if humanoid.Parent and humanoid.Health > 0 then
+		humanoid.Health = result.AfterHP
+	end
+	if result.Lethal then
+		model:SetAttribute("ZombieState", "DEFEATED")
+	end
+	return result
 end
 
 function ZombieService.GetRoot(model: Model): BasePart?
@@ -297,6 +365,17 @@ end
 -- destroying the rig. CombatService then owns final cleanup.
 function ZombieService.Release(model: Model): boolean
 	return releaseZombie(model)
+end
+
+function ZombieService.ClearForNewRun()
+	local zombieContainer = container
+	if zombieContainer then
+		for _, model in zombieContainer:GetChildren() do
+			model:Destroy()
+		end
+	end
+	registry:Clear()
+	spawnCursor = 0
 end
 
 return ZombieService

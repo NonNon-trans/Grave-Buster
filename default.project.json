@@ -19,8 +19,20 @@
       "$className": "ReplicatedStorage",
       "Client": {
         "$className": "Folder",
+        "HudLayout": {
+          "$path": "src/client/HudLayout.lua"
+        },
+        "FeedbackScope": {
+          "$path": "src/client/FeedbackScope.lua"
+        },
+        "ProgressionFeedbackRules": {
+          "$path": "src/client/ProgressionFeedbackRules.lua"
+        },
         "CombatFeedbackController": {
           "$path": "src/client/CombatFeedbackController.lua"
+        },
+        "ProgressionHud": {
+          "$path": "src/client/ProgressionHud.lua"
         },
         "CombatController": {
           "$path": "src/client/CombatController.lua"

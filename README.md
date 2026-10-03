@@ -1,8 +1,8 @@
 # Grave Buster
 
-現在Version: **v0.1 development**
+現在Version: **v0.2 Release Candidate**
 
-現在Phase: **GB-007 — Integration & QA / Release Candidate**
+現在Phase: **GB-029 — version-wide integrated regression / final Human pending**
 
 墓場から大量に出現するZombieを、様々なWeaponで次々に吹き飛ばすシンプルなAction Game。
 v0.1では「大量のZombieをほぼ待ち時間なしで一撃で吹っ飛ばし続けること自体が気持ちいいか」を検証します。
@@ -10,13 +10,13 @@ Thunder Battleとは独立した新規Projectです。
 
 GB-000のGit / Rojo基盤とGB-001の墓場Arena、GB-002のZombie Hordeに、Mobile-firstの一撃Combatを追加しています。
 LobbyやMenuを経由せず標準Character Spawnで直接Arenaへ入り、移動できます。
-5種類のWeaponはRange・Hit shape・Knockbackで差別化し、ZombieはPlayerへ接近しますが攻撃しません。
-Combat result、Zombie lifecycle、Wave progression、Session Currency、Weapon ownershipはServer Authorityです。CurrencyとownershipはSession-onlyで、DataStoreは未実装です。
+5種類のWeaponはRange・Hit shape・Knockbackで差別化します。GB-025からZombieはSpawnWaveに応じたDamageで近接攻撃し、全Player死亡時はRunをWave 1から再開します。
+Combat result、Zombie lifecycle、Wave progression、Player Progression、Weapon ownershipはServer Authorityです。GB-026からLevel / XP / Coins / Owned / Equipped / Best WaveをDataStoreへ保存し、Run stateはJoinごとにWave 1から始めます。
 
 ## Platform direction
 
 Primary Platformは**MOBILE**。今後はMobile-firstで、Touch UX・Mobile Landscape・Mobile Human Gateを優先し、PC専用対応は後回しにします。
-v0.1 RCでもRoblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、上部中央にWave表示、左上にKills、右上にSHOP buttonを置きます。
+Roblox標準Mobile movementを使用します。右側にAttack button、下部中央にWeapon Switcher、標準topbarの空き領域にWAVE、CoreUI下の従来右上位置にSHOP、WAVE下の横長HUDにProgression / Killsを置きます。
 
 Future note（未実装）: 一定確率または特殊AttackでZombieを「ホームラン」のように墓石群を越えて場外へ吹き飛ばす演出を検討します。
 これはPlayer boundaryとは別契約です。GB-003ではDefeated Zombieを非衝突physicsへ移すため場外launch可能ですが、確率・特殊Attack・専用演出は将来Phaseで検討します。
@@ -31,27 +31,40 @@ Grave-Buster/
 │   │   ├── ArenaService.lua
 │   │   ├── CombatRules.lua
 │   │   ├── CombatService.lua
+│   │   ├── DamageRules.lua
 │   │   ├── KillCounter.lua
+│   │   ├── PlayerHealthService.lua
+│   │   ├── ProgressionRules.lua
+│   │   ├── ProgressionDataRules.lua
+│   │   ├── ProgressionPersistence.lua
+│   │   ├── ProgressionService.lua
+│   │   ├── ProgressionSessionStore.lua
+│   │   ├── RunRules.lua
 │   │   ├── ShopRules.lua
 │   │   ├── ShopService.lua
-│   │   ├── ShopSessionStore.lua
 │   │   ├── ZombieRules.lua
 │   │   ├── ZombieService.lua
+│   │   ├── WaveRules.lua
 │   │   ├── WaveService.lua
 │   │   └── Bootstrap.server.lua
 │   ├── client/
 │   │   ├── CombatController.lua
 │   │   ├── CombatFeedbackController.lua
+│   │   ├── FeedbackScope.lua
+│   │   ├── HudLayout.lua
+│   │   ├── ProgressionFeedbackRules.lua
 │   │   ├── HoldState.lua
 │   │   ├── OwnedWeaponSource.lua
 │   │   ├── ShopController.lua
 │   │   ├── ShopPresentation.lua
+│   │   ├── ProgressionHud.lua
 │   │   ├── WeaponPresenter.lua
 │   │   ├── WeaponSwitcher.lua
 │   │   ├── WeaponSwitcherRules.lua
 │   │   ├── WaveHud.lua
 │   │   └── Bootstrap.client.lua
 │   └── shared/
+│       ├── DamageConfig.lua
 │       ├── HordeConfig.lua
 │       ├── FeedbackConfig.lua
 │       ├── ShopConfig.lua
@@ -60,15 +73,19 @@ Grave-Buster/
 ├── tests/
 │   ├── ActiveZombieRegistry.spec.luau
 │   ├── CombatRules.spec.luau
+│   ├── DamageRules.spec.luau
 │   ├── FeedbackConfig.spec.luau
 │   ├── HoldState.spec.luau
 │   ├── HordeConfig.spec.luau
 │   ├── HordeSimulation.spec.luau
 │   ├── KillCounter.spec.luau
+│   ├── ProgressionRules.spec.luau
+│   ├── ProgressionFeedbackRules.spec.luau
+│   ├── ProgressionSessionStore.spec.luau
+│   ├── ProgressionPersistence.spec.luau
 │   ├── ShopConfig.spec.luau
 │   ├── ShopPresentation.spec.luau
 │   ├── ShopRules.spec.luau
-│   ├── ShopSessionStore.spec.luau
 │   ├── WeaponConfig.spec.luau
 │   ├── WeaponSwitcherRules.spec.luau
 │   ├── validate_client_mapping.py
@@ -81,9 +98,9 @@ Grave-Buster/
 
 | Source | Roblox mapping | 責務 |
 | --- | --- | --- |
-| `src/server` | `ServerScriptService` | Arena、Zombie / Wave、Combat、Session Shop state / purchase validation |
+| `src/server` | `ServerScriptService` | Arena、Zombie attack / Wave / run reset、Combat、Progression persistence and ownership, Shop validation, Player HP |
 | `src/client/Bootstrap.client.lua` | `StarterPlayer.StarterPlayerScripts.Bootstrap` | Player join時に起動する唯一のClient Bootstrap |
-| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Switcher、Shop UI、Wave HUD |
+| `src/client`のModuleScript | `ReplicatedStorage.Client` | Touch input、weapon presentation、Momentum Switcher、Shop / Wave / progression UI |
 | `src/shared` | `ReplicatedStorage.Shared` | Project情報、Horde / Weapon / Shop設定 |
 
 SharedはServer / Client双方から参照できます。秘密情報やServer専用処理は置きません。
@@ -137,7 +154,7 @@ main
     └── phase/*
 ```
 
-各Phaseは`develop`からbranchを切り、Human / Reviewer Gate完了後に`develop`へmergeします。
+ユーザーの最新方針により、version要件をまとめて仕上げ、Harness等で自動検証し、version末尾に最終Human Checkを行います。今回は既存GB-028 branchのverified `86d2635`から`phase/GB-029-v0.2-release-candidate`を切り、SHOP復元と全体回帰をまとめています。中間phaseごとのmergeを強制せず、最終Humanと明示のmerge/Release判断までdevelop/mainを変更しません。
 Release時のみ`develop` → `main`へmergeします。
 GB-007の作業branchは`phase/GB-007-integration-qa`です。
 Remote設定は必須ではありません。`origin`が未設定・不正でも推測で変更しません。
@@ -217,11 +234,11 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 
 ## Online Weapon Shop仕様（GB-005）
 
-- Economy: Join時2000 Coins。BASEBALL BATだけをDefault Owned / Equippedとし、Character Resetでは維持、Leaveで破棄、Rejoinで初期化します。DataStore、Kill Reward、Monetizationはありません。
-- Prices: Baseball Bat 0、Frying Pan 200、Giant Hammer 400、Blower 600、Thunder Rod 1000 Coins。`ShopConfig`が正式Order、Price、Default Ownedを一元管理します。
-- Server authority: `ShopService`がPlayerごとのSession state、revision、purchase lockを所有します。ClientはWeapon IDだけを送信し、ServerがID、Price、already-owned、残高、request shapeを検証します。同一callback内にyieldを挟まずCurrency更新とownership grantを完結します。
-- State sync: `GetState`でCurrency / Owned Weapons / Equipped Weapon / Revisionを取得し、購入成功時は`StateChanged`とPurchase responseでsnapshotを返します。Clientは新しいrevisionだけを`OwnedWeaponSource`へ適用します。
-- SHOP button: `CoreUISafeInsets`内の右上、112×46 px。Shop Panelは中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
+- GB-005当時のEconomy baseline: Join時2000 test Coins。これはGB-024で廃止され、現行仕様は0 Coins開始です。
+- GB-005当時のPrices: Pan 200、Hammer 400、Blower 600、Thunder Rod 1000 Coins。GB-024で正式価格へ更新しました。
+- Server authority: `ProgressionService`がCoins / Owned Weapons / Equipped Weaponを含む唯一のPlayer profile stateを所有します。`ShopService`はpurchase request lockとUI revisionだけを管理し、ClientはWeapon IDだけを送信します。
+- State sync: `GetState`はProgressionServiceのCoins / Owned / Equippedを読み、ShopServiceのUI revisionを添えて返します。購入成功時は同じProgression stateを更新し、Shop / progression snapshotからClient表示を更新します。
+- SHOP button: 最新reviewで被弾HP表示との重なりが報告されたため、従来の`CoreUISafeInsets`内右上 `(1,-18,0,16)`・112×46 pxへ復元。Shop Panelは同safe area内、中央の相対76%×82%、480×270〜720×400 pxに制限します。HeaderのCurrencyは固定し、5枚のCard領域だけをscroll可能にします。
 - Currency visibility: `COINS: N`はPanel直下の固定Header layer（右上、160×44 px、ZIndex 13）に表示します。Close buttonと12 px、最小幅時のTitleと14 px以上離れ、Weapon listのscrollに影響されません。
 - Card: 短い文字Icon、Weapon Name、`BUY • PRICE COINS` / `OWNED • TAP TO EQUIP` / `EQUIPPED`を表示します。購入は自動Equipしません。Owned CardのTapは既存`EquipRequest`を再利用します。
 - Combat interaction: Shop open時にHold-to-Attackを停止し、ATTACKとSwitcherを隠します。Closeで即復帰しますがAttackは自動再開しません。Server Wave / Zombie simulationは停止しません。
@@ -233,7 +250,7 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - Hit / knockback feedback: Serverで実際にZombieをReleaseできたattackだけを`CombatFeedback`で攻撃Playerへ通知し、Defeated rootへ0.22秒だけ短いTrailをlocal生成します。Human Gate結果によりNeon hit flashは削除済みです。
 - Weapon identity: TrailをWeapon別に暖色 / 金属色 / Orange / Cyan / Violetへ軽微に色分けします。既存のKnockback force、hitbox、interval、physics lifetimeは変更しません。
 - Bounded effects: 1 attackの表示は最大8 Zombie分。TrailとAttachmentはDebrisで必ずcleanupし、Part、ParticleEmitter、Heartbeat、Zombie別connectionは使用しません。
-- Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。左上Safe Areaの116×36 px `KILLS N`表示へ反映し、Character Resetでは維持、Leave / Rejoinでは0へ戻ります。Currency / Rewardとは接続しません。
+- Kill counter: Serverの`KillCounter`がRelease成功数をPlayer単位で加算し、`SessionKills` attributeを複製します。GB-024からEconomy報酬はProgressionServiceのlethal kill rewardへ接続します。
 - Wave emphasis: 既存132×32 px表示を維持し、Wave更新時だけ0.55秒間1.16倍・背景を明瞭化し、0.35秒で通常表示へ戻します。巨大Bannerは追加しません。
 - Camera / Audio: Mobile camera操作と連続attackの安定性を優先してCamera shakeは追加しません。信頼できるAsset IDを新規導入しないためAudioも追加しません。
 
@@ -244,6 +261,73 @@ API参照: [SpawnLocation](https://create.roblox.com/docs/reference/engine/class
 - RC artifact: `build/Grave-Buster-v0.1-RC.rbxlx`。`build/`はGit ignore対象で、Published TEST ExperienceへPublishする入力です。
 - Release gate: Release Blocker 0件かつStatic gate PASS後、Physical Mobile DeviceのLandscapeでJoinからLeave / RejoinまでのE2Eを実施します。Published Mobile E2E PASS後にv0.1をRelease Readyとします。
 
+## Damage / HP Foundation（GB-021）
+
+- Weapon BaseDamageは`WeaponConfig`をsingle sourceとして保持します。Bat 10、Pan 15、Hammer 25、Blower 18、Thunder Rod 30。既存のinterval、hit shape、range、max targets、knockback、special behaviorとShop価格は維持します。
+- `ZombieService`は通常Wave spawnでHP 10のZombieを生成し、Server registry entryとModel attributeにMaxHP / CurrentHPを保持します。MaxHP / CurrentHPはServerが所有し、ACTIVE中のDamage適用とlethal transitionを管理します。
+- `DamageRules`はACTIVE個体だけにDamageを適用し、`AttackDamage`（Server解決値）、`ActualHPLoss`、`BeforeHP`、`AfterHP`を分けて返します。AfterHPは0未満にならず、lethal transition時にLifecycleを同期的にDEFEATEDへ変更します。CombatServiceはlethal個体だけを既存ZombieService.Release → knockback → cleanupへ送り、Session KillsもRelease成功時だけ増やします。
+- Damage NumberはHP残量でclampせず、Serverが解決した`AttackDamage`を表示します。`ActualHPLoss`と`AfterHP`は独立して扱い、OverkillでもAfterHPは0です。
+- `ZombieDamageFeedback`はServer結果の`AttackDamage` / CurrentHP / MaxHP / lethal stateをClientへ送ります。ClientはAttackDamageをDamage Numberに表示し、non-lethal hitのZombieだけにHP barを最大1.5秒表示します。再被弾で表示期限を更新し、lethal hitでは即時削除します。
+- `PlayerHealthService`はCharacter spawn / respawn時にHumanoid MaxHealthとHealthを100へ設定し、Playerの`MaxHP` attributeも100にします。Zombie attack、Player Damage、Level / XP / Coins reward、Wave scaling、Death run reset、persistenceはGB-021に含めません。
+- `DamageRules.spec.luau`はHP10 + Bat、HP15 + Batのnon-lethalと次撃lethal、HP15 + Pan、二重lethal拒否、複数個体の独立HP、Player MaxHP契約を検証します。Static validationはStudio / Published Human Gateの代替ではありません。
+
+## Player Level & XP（GB-022）
+
+- GB-022導入時は`ProgressionService`がLevel / current-level XPをSession内だけで保持していました。GB-026では既存Progression stateをDataStoreへ接続し、当時のSession-only境界を置き換えます。
+- XPはZombieをlethal defeatして既存ZombieService.Releaseに成功した時だけ付与します。報酬はServerが保持するZombie `SpawnWave`に基づき、`5 + floor(Wave / 2)` XPをdefeatごとに加算します。Non-lethal hitや二重Releaseでは報酬がありません。
+- 次Levelに必要なXPは`100 + (Level - 1) × 50`。overflowを保持し、1回の複数defeat報酬でも必要なだけLevel Upを繰り返します。Level multiplierは`1 + 0.05 × (Level - 1)`で、ServerのCombatServiceがWeapon BaseDamageへ`math.round`相当を適用してDamageRulesへ渡します。Overkill Damage Numberは引き続きServer解決済みFinal AttackDamageを表示します。
+- `ProgressionHud`は右上SHOP buttonの下にLevel、XP bar、数値を表示し、Server snapshot更新時に反映します。Level Upは短い集約表示で旧→新Levelとdamage増加を示し、Combatをpauseしません。
+- `ProgressionRules.spec.luau`はXP threshold、overflow、複数Level Up、Wave報酬、lethal報酬の重複防止、次attack damage更新、Overkillを検証します。`ProgressionSessionStore.spec.luau`はCharacter lifecycleをまたぐ保持とLeave / Rejoin初期化を確認します。
+
+## Human Studio Check（GB-022）
+
+1. `build/Grave-Buster-v0.2-GB022-player-progression.rbxlx`をStudioで開き、Playします。最初にLEVEL 1、0 / 100 XPが表示されることを確認します。
+2. Wave 1のZombieを倒し、Kill count増加と同時にXPが5増えること、XP barと数値が更新されることを確認します。Non-lethal hitはXPを与えません。
+3. Wave 1の15体とWave 2の5体を倒し、合計105 XPでLevel 2 / 5 XPとLevel Up feedbackを確認します。必要XPに達した後もWave / attackは止まらないことを確認します。
+4. Level 1のBat Damage Number 10と、Level 2のBat Damage Number 11を比較します。Level 2のBatをHP 10 Zombieへ当てた場合、Damage Numberは11、AfterHPは0です。
+5. CharacterをResetし、Level / XPが保持され、HUDとDamageが一致することを確認します。Leave / Rejoinで初期化されるのはGB-022の想定です。
+6. Shop、Owned / Equipped、Weapon Slider、Kills、Wave、HP bar、Knockback / cleanup、Player MaxHP 100が維持されることを確認します。PCとMobile Landscape双方でHUD衝突・clippingとRuntime Errorを確認します。
+
+Human Gate未実施のため、Static validationは視覚・操作確認の代替ではありません。
+
+## Wave Power Scaling（GB-023）
+
+- `HordeConfig`がWave 1–10のZombie HP / Damage / spawn quota表とWave 11+の式をsingle sourceとして持ちます。HPはroundして整数化します。MaxAliveは80、既存spawn pacingは0.65秒、Intermissionは0秒です。
+- `ZombieService.Spawn(wave)`はspawn時点のWave HPをModel attribute、Humanoid MaxHealth / Health、Server registryへ固定し、immutableな`SpawnWave`も記録します。ZombieDamageはconfigから解決できますが、Player Damage loopには接続しません。
+- `WaveRules`と`WaveService`は成功したspawnだけquotaへ加算します。80体cap中はquotaを保持して0.2秒間隔で空きを確認し、空いたslotからspawnを再開します。Wave clearはquotaを全てspawnし、当該Wave所属のACTIVE Zombieが0になった場合だけ一度発火します。
+- Clear eventはWave HUD内に`WAVE N CLEAR!`を1.35秒表示します。次Waveはclear発火後すぐ始まり、表示やIntermissionでGameplayを止めません。XPは撃破個体のSpawnWaveごとに集約・計算するため、Wave境界のraceで報酬が変わりません。
+- `HordeConfig.spec.luau`と`HordeSimulation.spec.luau`は固定/拡張balance、整数HP、cap、quota保持、slot再利用、clear条件と一回性を確認します。既存のDamage、Progression、Shop、Combat、Horde specsも併せて実行します。
+
+## Coins & Shop Economy（GB-024）
+
+- GB-024時点ではCoinsはLevel / XPと同じPlayer session stateに置き、Leaveで破棄していました。GB-026でこのstateをDataStoreに永続化します。ShopServiceは残高を保持せず、Shop snapshotではProgressionServiceから読みます。
+- Zombieをlethalにし、`ZombieService.Release`に成功した同一kill resultから、SpawnWave別にXP `5 + floor(Wave / 2)` とCoins `1 + floor(Wave / 3)`を一括付与します。non-lethal hit / Release失敗 / DEFEATED再処理ではどちらも増えません。
+- Wave bonusはGB-023のquota完了かつ当該Wave ACTIVE数0のclear判定後に`Wave × 10`を一度付与します。WaveRulesの一回clearとPlayer session claim ledgerで重複を防ぎ、clear通知・次Wave開始は止めません。
+- `ShopConfig`が正式価格を一元管理します: Batは初期Owned、Pan 80、Hammer 220、Blower 500、Thunder Rod 900 Coins。PurchaseはServerで検証し、ProgressionServiceがCoinsを減算した後、ShopServiceがOwnedを付与します。購入のみで自動Equipしません。
+- 既存Shopの固定Header `COINS: N`はServer snapshotとProgression state eventから更新され、購入 / kill / wave bonusを反映します。OwnedWeaponSourceはServer-confirmed Owned listをSwitcherへ即通知します。
+- Balance sanity: Wave 1の15 kill + clearで25 Coins、Wave 2で累計65 Coins、Wave 3 killは各2 Coins。80 CoinsでPanを購入できます。
+- Human Gate / static testsはHuman runtime感触の代わりではありません。
+
+
+## Death / Run Reset / Best Wave（GB-025）
+
+- Zombieはspawn時のimmutable `SpawnWave`から確定した`ZombieDamage`を使い、近接距離で各個体1.0秒間隔のServer-authoritative攻撃を行います。全AI updateごとの反復Damageはありません。Player MaxHPは100のままです。
+- `Players.RespawnTime`を2.5秒に設定し、RespawnしたCharacterはHP 100で再構成されます。Respawn Protectionは2秒間有効で、Playerの最初のAttack intentで即時解除します。
+- Zombieから実際にHP Damageを受けたPlayerには別stateの2秒Hit Invulnerabilityを付与します。期間中に別Zombieが攻撃しても無効となり、blocked hitは期限を延長しません。Player Attackはこのtimerを解除せず、Playerごとに独立しています。
+- Humanoid死亡（Reset Characterを含む）をPlayer unavailableとして共有Waveへ通知します。少なくとも一人のHumanが生存中はWave / Zombieを維持します。全Human死亡または最後のPlayer離脱時だけrun generationを一度進め、Waveを0へ戻し、Workspace.Zombies内のACTIVE個体とDefeated bodyをすべて削除し、Wave 1を開始します。再Spawnを待つ間はWave spawnが停止します。
+- Level / XP / Coins / Owned / EquippedはProgressionService profile stateで維持されます。`BestWave`は到達Waveが過去記録を超えた時だけ更新して`NEW RECORD! WAVE N`を短く表示します。Wave 1へのrun resetでは記録を下げません。GB-026でprofileはLeave後もDataStoreに残ります。
+- Player HPはRoblox標準のHealth表示を使用し、独自の重複HUDは生成しません。`RunRules.spec.luau`はdamage interval、hit invulnerability、protected damage、solo / multiplayer reset decision、BestWaveの非減少を検証します。Wave / Zombie integrationとRespawn timeはStudio / Published Human Gateで確認してください。
+
+## Human Studio Check（GB-023）
+
+1. `build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx`をStudioで開き、Playします。Wave 1のZombieはHP10、Wave 2はHP12でspawnし、WaveごとのBaseDamage + Player Level補正でBat / Panのlethal結果が期待通りか確認します。
+2. Wave clearを完了し、`WAVE N CLEAR!`表示が一度だけ出ること、表示中も次Waveが始まってZombieがspawnすること、旧2.5秒の待ちがないことを確認します。
+3. Wave 1 quotaの最後のZombieが残る間はclearしないこと、quota完了後も当該WaveのACTIVE Zombieが残っていればclearしないことを確認します。
+4. High-wave/cap項目はspecで検証済みですがStudioでも確認する場合、Wave 20のquota 110に対してAlive上限80を守り、撃破で空いたslotへ残りquotaが供給されることをServer Explorerで確認します。
+5. XP HUD / Level Up、SpawnWave由来XP、KILLS、Shop、Switcher、Combat、Knockback / cleanup、Player HP 100を再確認し、PC / Mobile LandscapeでRuntime Errorや明確な表示破綻がないことを確認します。
+
+Human Gate未実施のため、このチェックが完了するまでGB-023は未確定です。
+
 Static test:
 
 ```sh
@@ -252,14 +336,18 @@ build/luau-tools/luau tests/HordeSimulation.spec.luau
 build/luau-tools/luau tests/ZombieRules.spec.luau
 build/luau-tools/luau tests/WeaponConfig.spec.luau
 build/luau-tools/luau tests/CombatRules.spec.luau
+build/luau-tools/luau tests/DamageRules.spec.luau
 build/luau-tools/luau tests/ActiveZombieRegistry.spec.luau
 build/luau-tools/luau tests/HoldState.spec.luau
 build/luau-tools/luau tests/WeaponSwitcherRules.spec.luau
 build/luau-tools/luau tests/ShopConfig.spec.luau
 build/luau-tools/luau tests/ShopRules.spec.luau
-build/luau-tools/luau tests/ShopSessionStore.spec.luau
 build/luau-tools/luau tests/FeedbackConfig.spec.luau
 build/luau-tools/luau tests/KillCounter.spec.luau
+build/luau-tools/luau tests/ProgressionRules.spec.luau
+build/luau-tools/luau tests/ProgressionSessionStore.spec.luau
+build/luau-tools/luau tests/ProgressionPersistence.spec.luau
+python3 tests/validate_client_mapping.py build/Grave-Buster-v0.2-GB023-wave-scaling.rbxlx
 python3 tests/validate_client_mapping.py build/Grave-Buster.rbxlx
 ```
 
@@ -354,3 +442,81 @@ Static validationではserver rules、registry、hold lifecycle、config、Wave 
 6. Wave切替時だけ既存表示が短く1.16倍になり、その後通常サイズへ戻ることを確認します。Gameplayを遮るBannerがないことも確認します。
 7. Shop、Currency、Ownership、Switcher、Combat、Horde、EnvironmentがGB-005以前と同じ動作を維持していることを確認します。
 8. 28 Active Zombieと複数のDefeated bodyがある状態で連続attackし、Mobile frame rateに明確な悪化がなく、OutputにRuntime Errorがないことを確認します。
+
+## Human Studio / Published Mobile Check（GB-024）
+
+1. `build/Grave-Buster-v0.2-GB024-economy.rbxlx`をStudioで開き、Playします。Join直後 Shop Header が`COINS: 0`、SwitcherがBASEBALL BATのみ、BatがEQUIPPEDであることを確認します。
+2. Wave 1のZombieを倒すごとにCoinsが1増え、15体とWave clear bonusの合計で25 Coinsになることを確認します。Wave Clear表示中も次Waveが即開始することを確認します。
+3. Wave 2をclear後に累計65 Coins、Wave 3 killごとに2 Coins増え、80到達でFrying Panが購入可能になることを確認します。
+4. Panを購入し、残高が80減ること、OWNEDになること、Switcherへ即追加されること、購入だけでは装備が変わらないことを確認します。ShopまたはSwitcherからEquipしてCombatを続けます。
+5. Insufficient Coins、二重tap、Owned再購入、未知Weapon requestの拒否と残高不変を確認します。
+6. Character Reset後もCoins / Owned / Equipped / Level / XPが維持され、ExperienceをLeave / RejoinするとCoins 0、BatのみOwned、Level 1 / XP 0へ戻ることを確認します。
+7. Shopの固定Coins Headerがkill / clear bonus / purchase後に更新されること、Mobile LandscapeでShop / Combat / Switcher / HUDと衝突しないことを確認します。
+8. GB-023 Wave clear条件、SpawnWave、Wave scaling、KILLS、XP / Level up、HP / Damage、Combat / Knockback、PC / Mobile、Environmentを回帰確認し、OutputにRuntime Errorがないことを確認します。
+
+Published Mobile Human GateはこのArtifactをTEST ExperienceへPublishし、LandscapeのPhysical Mobile Deviceで実施してください。
+
+
+## Human Studio / Published Mobile Check（GB-025）
+
+1. `build/Grave-Buster-v0.2-GB025-no-player-hp-hud.rbxlx`をStudioで開き、Playします。PlayerがHP 100でSpawnし、Roblox標準Health表示が機能することを確認します。Grave Buster独自のHP HUDは表示されません。
+2. Zombieが近接するとHPが減ることを確認します。最初のWaveのDamageは10、Wave 6では12、Wave 13では16です。最初の被弾から2秒間は別ZombieのDamageも無効になり、blocked hitで期限が延長されないこと、Player Attackでも解除されないことを確認します。Respawn Protectionは別の2秒stateとしてAttackで解除されます。Zombie DamageにPlayer knockbackがないことも確認します。
+3. Zombieへ近接攻撃させて死亡し、約2.5秒後にHP 100でRespawn、Zombie群が全 cleanup、Wave 1から再開することを確認します。Level / XP / Coins / Owned / Equipped / BestWaveは維持されます。
+4. Roblox標準Reset Characterを実行し、Deathと同じSolo Run Resetになることを確認します。Reset連打や死亡同時発生でもWave 1が二重起動せず、Zombieが再蓄積しないことを確認します。
+5. Respawn直後はZombieに触れても2秒間HPが減らないこと、その間にATTACKするとProtectionが解除されることを確認します。移動はProtection中も可能です。
+6. Waveを過去BestWave以上へ進めて`NEW RECORD! WAVE N`表示を確認し、ResetでWave 1に戻ってもBestWaveが変わらないことを確認します。
+7. 2人以上でTestし、片方を死亡 / Resetしても生存者のWaveとZombieが継続すること、全員が死亡した時だけ共有Waveがcleanup後Wave 1へ戻ることを確認します。
+8. Wave scaling / quota / Intermission 0、Level / XP / Coins、Shop / Owned / Equipped、Slider、Combat / Damage / Knockback / KILLS、PC / Mobile UI、Arena / Fog / Clouds / Spawnを回帰確認し、OutputにRuntime Errorがないことを確認します。最終判定はTEST ExperienceをPublishしたPhysical Mobile DeviceのLandscapeで行います。
+
+## Progression Persistence（GB-026）
+
+- DataStore profile schema version 1には`Level` / `XP` / `Coins` / `OwnedWeapons` / `EquippedWeapon` / `BestWave`だけを保存します。Wave / HP / Zombie / Run / Kills / protection stateは保存しません。新規profileはLevel 1、XP 0、Coins 0、BatのみOwned / Equipped、BestWave 1です。
+- `ProgressionService`がGameplay stateとSave対象のsingle sourceです。`ProgressionDataRules`がschema / sanitize / serializeを担当し、`ProgressionPersistence`がDataStoreのload / UpdateAsync save / bounded retryを担当します。Shopの購入・Equipも同じprofileを変更します。
+- Loadは`SUCCESS_EXISTING` / `SUCCESS_NEW` / `FAILURE`を区別します。Load失敗やsession lock競合時はDefaultを確定保存せずPlayerをKickし、既存profileを保護します。破損した個別値は安全な下限 / fallbackへsanitizeし、未知Weaponは落としてBatを必ず残します。未知schema versionは上書きせず失敗扱いです。
+- Autosaveは45秒ごと、PlayerRemoving、BindToCloseで行い、各writeは最大3回retryします。Per-player 120秒 leaseをUpdateAsyncで更新し、古いserver session tokenのSaveを拒否します。短いSave failureではmemory stateを変更せず、後続autosaveで再試行します。
+- `ProgressionPersistence.spec.luau`はnew / existing round-trip、run state除外、sanitize、load / save failure、player分離、stale session拒否をmock DataStoreで検証します。Studio API failure時はJoinを拒否するため、Load失敗時も新規Defaultとして遊ばせる挙動にはなりません。
+
+Studio / Human Gate:
+
+1. StudioのGame Settings → SecurityでStudio Access to API Servicesを有効にします。実データと混ざらないよう、まずTEST Experience / test universeで検証します。
+2. Level / XP / Coinsを増やし、Weaponを購入・Equipし、Best Waveを更新してLeaveします。同じTEST ExperienceへRejoinし、それらが復元されることを確認します。
+3. RejoinごとにWave 1 / HP 100 / KILLS 0で開始し、Zombie / Run stateが引き継がれないことを確認します。Character Reset / Deathは現在のLoaded progressionを維持します。
+4. DataStore unavailableを試す場合、Studio API accessを無効にするかmock testを使います。PlayerがKickされ、既存DataをDefaultで上書きしないことを確認します。既存本番dataを使ったfailure testは行いません。
+
+## Momentum Weapon Slider（GB-027）
+
+- 左右Arrowは1 Weaponずつ切り替え、端で止まります。中央PickerはOwned Weapon itemを横向き`ScrollingFrame`内へ同時配置し、`CanvasPosition`を連続移動してTouch / Mouse Dragへ追従します。
+- Release後はvelocityに応じて慣性減速し、最寄りitemのvisual centerをviewport centerへsmooth snapします。Drag / inertia中はpreviewのみ、snap完了時に最終Weaponだけを既存Server Equip pipelineへ1回送ります。左右paddingにより最初・最後のitemも中央に揃います。
+- Purchase後のlist refresh、Equipped state、Persistenceは既存`OwnedWeaponSource` / `ProgressionService`を維持します。
+- 最終tuningは`WeaponSwitcherRules.Tuning`へ集約：item pitch 68% viewport幅、item width 90% of pitch、flick threshold 900 px/s、deceleration 4500 px/s²、minimum travel 0.55 Weapon、maximum travel 3.0 Weapon、snap 0.16秒。Idleは50%透明、操作中は完全表示、snap後1秒保持して0.3秒fadeします。
+
+Final Smoke（Published TEST / Mobile Landscape）:
+
+1. `build/Grave-Buster-v0.2-GB027-final.rbxlx`をStudioで開きます。ArtifactをPublishする際はRojoをDisconnectし、旧同期内容による上書きを避けます。
+2. Build ID、module version表示、pointer / canvas数値、診断色・枠・ログがないことを確認します。
+3. 複数Owned WeaponでSlow Dragの連続移動、center snap、Arrow 1-step、Flick、boundary停止、Opacityを確認します。
+4. Shop購入直後の追加、snap後のEquip / Attack、Character Reset、Rejoin後のEquipped復元を確認します。
+
+## Progression Feedback Polish（GB-028）
+
+- 数値・Server gameplay・DataStore schema/lease・GB-027 picker tuningは変更しません。Level / XP / Coins / Best Waveと現Weapon damage / KillsをWAVE直下の横長HUDで表示します。Coins / XP counterとXP barは短くTweenし、rewardはServerの明示的grantだけを0.65秒単位に集約してHUD内へ表示します。Load / Purchase / Equipからgainを推測しません。
+- Level Up / NEW RECORD / Death→Respawnは上部の1つのnotice領域を共有し、種類ごとに最新通知を保持します。Deathは最優先、Record、Levelの順です。Shop中はProgression HUD/noticeを隠し、重要noticeをClose後へ保持します。Wave clearは既存Wave表示内に次Waveも示し、Gameplayをpauseしません。
+- Shopは購入成功時にWeapon名とTAP TO EQUIPを表示し、Cardには現在LevelでのDamageを表示します。購入のみの自動Equipは追加しません。Damage NumberはServerのAttackDamageをそのまま表示し、lethal色と小さなpopで強調します。Live Numberは24個まで、HP bar timerは個体ごとに1個へ置換します。
+- `FeedbackScope`がfeedback UIのConnection / keyed task / Tweenを所有し、GUI / Zombie削除でcleanupします。No feedback Heartbeat / gameplay wait / new Remote / external Asset。
+- Static Gate: `python3 tests/run_static_gate.py`。現在のv0.2 RC branchで19 specs、63 compile（41 executable + 19 specs + 3 harnesses）、fresh build、全source/require一致、embedded client回帰と実Service/Picker player journey、guards、cleanup、protected gameplay、diffを自動検証します。Roblox runtimeのPASSではありません。
+- 最新Human手順は[version末尾の最小チェック](docs/GB-029-final-human-check.md)。**Source → fresh build → source/revision一致 → Rojo Disconnect → artifactをStudioでopen → TEST ExperienceへPublish → fresh RobloxClient**。LiveSyncなし。Cloudの実Studio/Roblox/physical MobileはNOTRUNです。旧phase単位の停止方針はユーザーの最新version単位の指示で更新されています。
+
+
+### GB-028 Human review後のHUD配置修正
+
+ユーザーは旧revision `d9c306cd11dea3e116a5a2b1cdd96773c16ca99d`の全テスト項目PASSを報告しましたが、HUDが邪魔になるため配置変更を依頼しました。WAVE / SHOP launcherはRoblox TopbarSafeInsetsの空き領域へ上げ、HUDはWAVE直下の横長へ変更。GuiService.GetInsetAreaのlive safe rectanglesでnotch / standard buttons / viewport changesへ追従します。Shop overlay、数値・state・picker tuningは維持します。
+
+このtopbar SHOP版はreview履歴です。ユーザーはWAVE・横長HUDをPASSとし、SHOPだけ従来位置へ戻すよう依頼しました。最新artifactと手順は下記RCを使用します。
+
+## v0.2 Release Candidate（GB-029）
+
+`phase/GB-029-v0.2-release-candidate`でSHOPを復元し、v0.2をまとめて統合・回帰検証します。最新artifact: `build/gb029/Grave-Buster-v0.2-Release-Candidate.rbxlx`。[coverage/未完](docs/GB-029-v0.2-release-candidate.md)と[最終Human](docs/GB-029-final-human-check.md)を参照。
+
+自動player journeyは生成artifactの39 ModuleScriptsを評価し、実Progression / Shop / Combat / PlayerHealth / Wave services、実Shop/HUD/Pickerをin-memory API doublesで実行します。Wave 1 kill → XP/Coins → Level/Damage growth → purchase/picker/swap → high-wave cap80/quota → death/retain/retry/beatBest → multiplayer → save/rejoin/nonpersistent run/load refusalと入力/cleanupを検証します。これはphysics/real DataStore/実機検証ではありません。
+
+`tests/studio/GB029ReleaseCandidateCheck.luau`は許可済みTEST Studio Client専用のread-only observerで、artifactから除外。最終Humanは被弾時SHOP非重なりと最小play feelに絞ります。v0.2 implementation scopeに新しい未実装機能は見つかっていませんが、最終Human/実Engine観測とRelease判断は未完です。候補push/Library保存で停止し、develop/main merge、tag、正式Release、Roblox Publishは行いません。
